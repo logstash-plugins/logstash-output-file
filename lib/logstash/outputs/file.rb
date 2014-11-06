@@ -12,15 +12,15 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   milestone 2
 
   # The path to the file to write. Event fields can be used here,
-  # like "/var/log/logstash/%{host}/%{application}"
+  # like `/var/log/logstash/%{host}/%{application}`
   # One may also utilize the path option for date-based log
   # rotation via the joda time format. This will use the event
   # timestamp.
-  # E.g.: path => "./test-%{+YYYY-MM-dd}.txt" to create
-  # ./test-2013-05-29.txt
+  # E.g.: `path => "./test-%{+YYYY-MM-dd}.txt"` to create
+  # `./test-2013-05-29.txt`
   #
   # If you use an absolute path you cannot start with a dynamic string.
-  # E.g: /%{myfield}/, /test-%{myfield}/ are not valid paths
+  # E.g: `/%{myfield}/`, `/test-%{myfield}/` are not valid paths
   config :path, :validate => :string, :required => true
 
   # The maximum size of file to write. When the file exceeds this
@@ -32,7 +32,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   config :max_size, :validate => :string
 
   # The format to use when writing events to the file. This value
-  # supports any string and can include %{name} and other dynamic
+  # supports any string and can include `%{name}` and other dynamic
   # strings.
   #
   # If this setting is omitted, the full json representation of the
