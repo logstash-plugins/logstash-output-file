@@ -7,6 +7,7 @@ require "zlib"
 # This output will write events to files on disk. You can use fields
 # from the event as parts of the filename and/or path.
 class LogStash::Outputs::File < LogStash::Outputs::Base
+  FIELD_REF = /%\{[^}]+\}/
 
   config_name "file"
   milestone 2
@@ -126,7 +127,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   private
   def path_with_field_ref?
-    path =~ /%\{[^}]+\}/
+    path =~ FIELD_REF
   end
 
   def format_message(event)
@@ -138,8 +139,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   def extract_file_root
-    extracted_path = File.expand_path(path.gsub(/%{.+/, ''))
-    Pathname.new(extracted_path).expand_path
+    parts = File.expand_path(path).split(File::SEPARATOR)
+    parts.take_while { |part| part !~ FIELD_REF }.join(File::SEPARATOR)
   end
 
   def teardown

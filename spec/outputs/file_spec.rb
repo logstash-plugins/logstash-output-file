@@ -186,6 +186,23 @@ describe LogStash::Outputs::File do
           end
         end
 
+        it 'write the events to a file when some part of a folder or file is dynamic' do
+          t = Time.now
+          good_event = LogStash::Event.new("@timestamp" => t)
+
+          Stud::Temporary.directory do |path|
+            dynamic_path = "#{path}/failed_syslog-%{+YYYY-MM-dd}"
+            expected_path = "#{path}/failed_syslog-#{t.strftime("%Y-%m-%d")}"
+
+            config = { "path" => dynamic_path }
+            output = LogStash::Outputs::File.new(config)
+            output.register
+            output.receive(good_event)
+
+            expect(File.exist?(expected_path)).to eq(true)
+          end
+        end
+
         it 'write the event to the generated filename with multiple deep' do
           good_event = LogStash::Event.new
           good_event['error'] = '/inside/errors/42.txt'
