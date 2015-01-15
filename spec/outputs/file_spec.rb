@@ -203,6 +203,27 @@ describe LogStash::Outputs::File do
           end
         end
 
+        it 'write the events to the generated path containing multiples fieldref' do
+          t = Time.now
+          good_event = LogStash::Event.new("error" => 42,
+                                           "@timestamp" => t,
+                                           "level" => "critical",
+                                           "weird_path" => '/inside/../deep/nested')
+
+          Stud::Temporary.directory do |path|
+            dynamic_path = "#{path}/%{error}/%{level}/%{weird_path}/failed_syslog-%{+YYYY-MM-dd}"
+            expected_path = "#{path}/42/critical/deep/nested/failed_syslog-#{t.strftime("%Y-%m-%d")}"
+
+            config = { "path" => dynamic_path }
+
+            output = LogStash::Outputs::File.new(config)
+            output.register
+            output.receive(good_event)
+
+            expect(File.exist?(expected_path)).to eq(true)
+          end
+        end
+
         it 'write the event to the generated filename with multiple deep' do
           good_event = LogStash::Event.new
           good_event['error'] = '/inside/errors/42.txt'
