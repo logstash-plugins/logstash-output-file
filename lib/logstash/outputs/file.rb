@@ -79,7 +79,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def validate_path
     root_directory = @path.split(File::SEPARATOR).select { |item| !item.empty? }.shift
 
-    if (root_directory =~ /%\{[^}]+\}/) != nil
+    if (root_directory =~ FIELD_REF) != nil
       @logger.error("File: The starting part of the path should not be dynamic.", :path => @path)
       raise LogStash::ConfigurationError.new("The starting part of the path should not be dynamic.")
     end
