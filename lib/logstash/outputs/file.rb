@@ -10,7 +10,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   FIELD_REF = /%\{[^}]+\}/
 
   config_name "file"
-  milestone 2
 
   # The path to the file to write. Event fields can be used here,
   # like `/var/log/logstash/%{host}/%{application}`
