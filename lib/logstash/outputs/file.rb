@@ -76,11 +76,20 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   private
   def validate_path
-    root_directory = @path.split(File::SEPARATOR).select { |item| !item.empty? }.shift
-
     if (root_directory =~ FIELD_REF) != nil
       @logger.error("File: The starting part of the path should not be dynamic.", :path => @path)
       raise LogStash::ConfigurationError.new("The starting part of the path should not be dynamic.")
+    end
+  end
+
+  private
+  def root_directory
+    parts = @path.split(File::SEPARATOR).select { |item| !item.empty?  }
+    if Gem.win_platform?
+      # First part is the drive letter
+      parts[1]
+    else
+      parts.first
     end
   end
 
@@ -98,6 +107,20 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     output = format_message(event)
     write_event(file_output_path, output)
   end # def receive
+
+  public
+  def teardown
+    @logger.debug("Teardown: closing files")
+    @files.each do |path, fd|
+      begin
+        fd.close
+        @logger.debug("Closed file #{path}", :fd => fd)
+      rescue Exception => e
+        @logger.error("Exception while flushing and closing files.", :exception => e)
+      end
+    end
+    finished
+  end
 
   private
   def inside_file_root?(log_path)
@@ -129,6 +152,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     path =~ FIELD_REF
   end
 
+  private
   def format_message(event)
     if @message_format
       event.sprintf(@message_format)
@@ -137,22 +161,10 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
   end
 
+  private
   def extract_file_root
     parts = File.expand_path(path).split(File::SEPARATOR)
     parts.take_while { |part| part !~ FIELD_REF }.join(File::SEPARATOR)
-  end
-
-  def teardown
-    @logger.debug("Teardown: closing files")
-    @files.each do |path, fd|
-      begin
-        fd.close
-        @logger.debug("Closed file #{path}", :fd => fd)
-      rescue Exception => e
-        @logger.error("Exception while flushing and closing files.", :exception => e)
-      end
-    end
-    finished
   end
 
   private
@@ -165,6 +177,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   # every flush_interval seconds or so (triggered by events, but if there are no events there's no point flushing files anyway)
+  private
   def flush_pending_files
     return unless Time.now - @last_flush_cycle >= flush_interval
     @logger.debug("Starting flush cycle")
@@ -176,6 +189,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   # every 10 seconds or so (triggered by events, but if there are no events there's no point closing files anyway)
+  private
   def close_stale_files
     now = Time.now
     return unless now - @last_stale_cleanup_cycle >= @stale_cleanup_interval
@@ -192,6 +206,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @last_stale_cleanup_cycle = now
   end
 
+  private
   def open(path)
     return @files[path] if @files.include?(path) and not @files[path].nil?
 

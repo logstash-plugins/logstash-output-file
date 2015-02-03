@@ -77,28 +77,25 @@ describe LogStash::Outputs::File do
   end
 
   describe "#register" do
+    let(:path) { '/%{name}' }
+    let(:output) { LogStash::Outputs::File.new({ "path" => path }) }
+
     it 'doesnt allow the path to start with a dynamic string' do
-      path = '/%{name}'
-      output = LogStash::Outputs::File.new({ "path" => path })
       expect { output.register }.to raise_error(LogStash::ConfigurationError)
+      output.teardown
     end
 
-    it 'doesnt allow the root directory to have some dynamic part' do
-      path = '/a%{name}/'
-      output = LogStash::Outputs::File.new({ "path" => path })
-      expect { output.register }.to raise_error(LogStash::ConfigurationError)
-
-      path = '/a %{name}/'
-      output = LogStash::Outputs::File.new({ "path" => path })
-      expect { output.register }.to raise_error(LogStash::ConfigurationError)
-
-      path = '/a- %{name}/'
-      output = LogStash::Outputs::File.new({ "path" => path })
-      expect { output.register }.to raise_error(LogStash::ConfigurationError)
-
-      path = '/a- %{name}'
-      output = LogStash::Outputs::File.new({ "path" => path })
-      expect { output.register }.to raise_error(LogStash::ConfigurationError)
+    context 'doesnt allow the root directory to have some dynamic part' do
+      ['/a%{name}/',
+       '/a %{name}/',
+       '/a- %{name}/',
+       '/a- %{name}'].each do |test_path|
+         it "with path: #{test_path}" do
+           path = test_path
+           expect { output.register }.to raise_error(LogStash::ConfigurationError)
+           output.teardown
+         end
+       end
     end
 
     it 'allow to have dynamic part after the file root' do
@@ -136,6 +133,7 @@ describe LogStash::Outputs::File do
             error_file = File.join(path, config["filename_failure"])
 
             expect(File.exist?(error_file)).to eq(true)
+            output.teardown
           end
         end
 
@@ -154,6 +152,7 @@ describe LogStash::Outputs::File do
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(2)
+            output.teardown
           end
         end
 
@@ -166,6 +165,7 @@ describe LogStash::Outputs::File do
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(1)
+            output.teardown
           end
         end
       end
@@ -183,6 +183,7 @@ describe LogStash::Outputs::File do
 
             good_file = File.join(path, good_event['error'])
             expect(File.exist?(good_file)).to eq(true)
+            output.teardown
           end
         end
 
@@ -200,6 +201,7 @@ describe LogStash::Outputs::File do
             output.receive(good_event)
 
             expect(File.exist?(expected_path)).to eq(true)
+            output.teardown
           end
         end
 
@@ -221,6 +223,7 @@ describe LogStash::Outputs::File do
             output.receive(good_event)
 
             expect(File.exist?(expected_path)).to eq(true)
+            output.teardown
           end
         end
 
@@ -236,6 +239,7 @@ describe LogStash::Outputs::File do
 
             good_file = File.join(path, good_event['error'])
             expect(File.exist?(good_file)).to eq(true)
+            output.teardown
           end
         end
       end
