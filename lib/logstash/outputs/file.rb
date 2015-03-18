@@ -4,8 +4,18 @@ require "logstash/outputs/base"
 require "logstash/errors"
 require "zlib"
 
-# This output will write events to files on disk. You can use fields
+# This output writes events to files on disk. You can use fields
 # from the event as parts of the filename and/or path.
+#
+# By default, this output writes one event per line in **json** format.
+# You can customise the line format using the `line` codec like
+# [source,ruby]
+# output {
+#  file {
+#    path => ...
+#    codec => { line { format => "custom format: %{message}"}}
+#  }
+# }
 class LogStash::Outputs::File < LogStash::Outputs::Base
   FIELD_REF = /%\{[^}]+\}/
 
@@ -31,7 +41,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   #
   # If this setting is omitted, the full json representation of the
   # event will be written as a single line.
-  config :message_format, :validate => :string
+  config :message_format, :validate => :string, :deprecated => "You can achieve the same behavior with the 'line' codec"
 
   # Flush interval (in seconds) for flushing writes to log files.
   # 0 will flush on every message.
@@ -47,7 +57,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # If the a file is deleted, but an event is comming with the need to be stored
   # in such a file, the plugin will created a gain this file. Default => true
   config :create_if_deleted, :validate => :boolean, :default => true
- 
+
+  default :codec, "json_lines"
 
   public
   def register
@@ -73,6 +84,13 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @last_stale_cleanup_cycle = now
     @flush_interval = @flush_interval.to_i
     @stale_cleanup_interval = 10
+
+    if @message_format
+     @codec = LogStash::Plugin.lookup("codec", "line").new
+     @codec.format = @message_format
+    end
+
+    @codec.on_event(&method(:write_event))
   end # def register
 
   private
@@ -96,18 +114,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   public
   def receive(event)
-
-    file_output_path = generate_filepath(event)
-
-    if path_with_field_ref? && !inside_file_root?(file_output_path)
-      @logger.warn("File: the event tried to write outside the files root, writing the event to the failure file",  :event => event, :filename => @failure_path)
-      file_output_path = @failure_path
-    elsif !@create_if_deleted && deleted?(file_output_path)
-      file_output_path = @failure_path
-    end
-
-    output = format_message(event)
-    write_event(file_output_path, output)
+    @codec.encode(event)
+    close_stale_files
   end # def receive
 
   public
@@ -130,16 +138,19 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   private
-  def write_event(log_path, event)
-    @logger.debug("File, writing event to file.", :filename => log_path)
-    fd = open(log_path)
+  def write_event(event, data)
+    file_output_path = generate_filepath(event)
+    if path_with_field_ref? && !inside_file_root?(file_output_path)
+      @logger.warn("File: the event tried to write outside the files root, writing the event to the failure file",  :event => event, :filename => @failure_path)
+      file_output_path = @failure_path
+    elsif !@create_if_deleted && deleted?(file_output_path)
+      file_output_path = @failure_path
+    end
+    @logger.debug("File, writing event to file.", :filename => file_output_path)
+    fd = open(file_output_path)
     # TODO(sissel): Check if we should rotate the file.
-
-    fd.write(event)
-    fd.write("\n")
-
+    fd.write(data)
     flush(fd)
-    close_stale_files
   end
 
   private
@@ -150,15 +161,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   private
   def path_with_field_ref?
     path =~ FIELD_REF
-  end
-
-  private
-  def format_message(event)
-    if @message_format
-      event.sprintf(@message_format)
-    else
-      event.to_json
-    end
   end
 
   private
