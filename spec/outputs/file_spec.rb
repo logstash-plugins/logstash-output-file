@@ -30,7 +30,7 @@ describe LogStash::Outputs::File do
 
     agent do
       line_num = 0
-      
+
       # Now check all events for order and correctness.
       tmp_file.each_line do |line|
         event = LogStash::Event.new(LogStash::Json.load(line))
@@ -169,7 +169,7 @@ describe LogStash::Outputs::File do
 
         it 'writes the bad event in the specified error file' do
           Stud::Temporary.directory('filepath_error') do |path|
-            config = { 
+            config = {
               "path" => "#{path}/%{error}",
               "filename_failure" => "_error"
             }
@@ -293,6 +293,69 @@ describe LogStash::Outputs::File do
             good_file = File.join(path, good_event['error'])
             expect(File.exist?(good_file)).to eq(true)
             output.close
+          end
+        end
+      end
+    end
+    context "output string format" do
+      context "when using default configuration" do
+        it 'write the event as a json line' do
+          good_event = LogStash::Event.new
+          good_event['message'] = 'hello world'
+
+          Stud::Temporary.directory do |path|
+            config = { "path" => "#{path}/output.txt" }
+            output = LogStash::Outputs::File.new(config)
+            output.register
+            output.receive(good_event)
+            good_file = File.join(path, 'output.txt')
+            expect(File.exist?(good_file)).to eq(true)
+            output.close #teardown first to allow reading the file
+            File.open(good_file) {|f|
+              event = LogStash::Event.new(LogStash::Json.load(f.readline))
+              expect(event["message"]).to eq("hello world")
+            }
+          end
+        end
+      end
+      context "when using line codec" do
+        it 'writes event using specified format' do
+          good_event = LogStash::Event.new
+          good_event['message'] = "hello world"
+
+          Stud::Temporary.directory do |path|
+            config = { "path" => "#{path}/output.txt" }
+            output = LogStash::Outputs::File.new(config)
+            output.codec = LogStash::Codecs::Line.new({ "format" => "Custom format: %{message}"})
+            output.register
+            output.receive(good_event)
+            good_file = File.join(path, 'output.txt')
+            expect(File.exist?(good_file)).to eq(true)
+            output.close #teardown first to allow reading the file
+            File.open(good_file) {|f|
+              line = f.readline
+              expect(line).to eq("Custom format: hello world\n")
+            }
+          end
+        end
+      end
+      context "when using deprecated message_format config" do
+        it 'falls back to line codec' do
+          good_event = LogStash::Event.new
+          good_event['message'] = 'hello world'
+
+          Stud::Temporary.directory do |path|
+            config = { "path" => "#{path}/output.txt", "message_format" => "Custom format: %{message}" }
+            output = LogStash::Outputs::File.new(config)
+            output.register
+            output.receive(good_event)
+            good_file = File.join(path, 'output.txt')
+            expect(File.exist?(good_file)).to eq(true)
+            output.close #teardown first to allow reading the file
+            File.open(good_file) {|f|
+              line = f.readline
+              expect(line).to eq("Custom format: hello world\n")
+            }
           end
         end
       end
