@@ -57,7 +57,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     workers_not_supported
 
     @files = {}
-    
+
     @path = File.expand_path(path)
 
     validate_path
@@ -220,7 +220,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
-    if stat and stat.ftype == "fifo" and RUBY_PLATFORM == "java"
+    if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
       fd = java.io.FileWriter.new(java.io.File.new(path))
     else
       fd = File.new(path, "a")
