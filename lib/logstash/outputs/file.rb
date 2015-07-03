@@ -7,6 +7,9 @@ require "zlib"
 # This output will write events to files on disk. You can use fields
 # from the event as parts of the filename and/or path.
 class LogStash::Outputs::File < LogStash::Outputs::Base
+  @@event_count=0
+  @@file_ind=0
+  @@actual_path=""
   FIELD_REF = /%\{[^}]+\}/
 
   config_name "file"
@@ -29,7 +32,15 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # and so forth.
   #
   # NOT YET SUPPORTED
-  config :max_size, :validate => :string
+  config :max_size, :validate => :string, :default => -1
+  
+  
+  # The maximum number of lines to write per file. When the file exceeds this
+  # threshold, it will be rotated to the current filename + ".1"
+  # If that file already exists, the previous .1 will shift to .2
+  # and so forth.
+  config :max_count, :validate => :string, :default => -1
+
 
   # The format to use when writing events to the file. This value
   # supports any string and can include `%{name}` and other dynamic
@@ -59,6 +70,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @files = {}
 
     @path = File.expand_path(path)
+    @@actual_path = @path
 
     validate_path
 
@@ -96,6 +108,21 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   public
   def receive(event)
     return unless output?(event)
+    #Check whether the max count exceeded
+	if ((@max_count > 0 ) && (@@event_count >= @max_count))
+	  	@@event_count = 0;
+		  @path = @@actual_path + ".#{@@file_ind}"
+    	@logger.info("Output file changed as max_count reached: "+@path)
+		  @@file_ind = @@file_ind + 1
+	 end
+	 #Check whether the max size exceeded
+	 if ((@max_size > 0 ) && (File::exist?(@path)) && (File.new(@path).size) + event.to_json.bytesize >= @max_size)
+		  @path = @@actual_path + ".#{@@file_ind}"
+		  @@event_count = 0;
+		  @logger.info("Output file changed as max_size reached: "+@path)
+		  @@file_ind = @@file_ind + 1
+	 end
+  	@@event_count = @@event_count + 1
 
     file_output_path = generate_filepath(event)
 
