@@ -32,7 +32,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # and so forth.
   #
   # NOT YET SUPPORTED
-  config :max_size, :validate => :string
+  config :max_size, :validate => :string, :default => -1
   
   
   # The maximum number of lines to write per file. When the file exceeds this
@@ -108,12 +108,20 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   public
   def receive(event)
     return unless output?(event)
-    if ((@max_count > 0 ) && (@@event_count >= @max_count))
+    #Check whether the max count exceeded
+	if ((@max_count > 0 ) && (@@event_count >= @max_count))
 	  	@@event_count = 0;
-		  @path = @@actual_path + "#{@@file_ind}"
-    	@logger.info("Output file changed asmax_count reached: "+@path)
+		  @path = @@actual_path + ".#{@@file_ind}"
+    	@logger.info("Output file changed as max_count reached: "+@path)
 		  @@file_ind = @@file_ind + 1
-	  end
+	 end
+	 #Check whether the max size exceeded
+	 if ((@max_size > 0 ) && (File::exist?(@path)) && (File.new(@path).size) + event.to_json.bytesize >= @max_size)
+		  @path = @@actual_path + ".#{@@file_ind}"
+		  @@event_count = 0;
+		  @logger.info("Output file changed as max_size reached: "+@path)
+		  @@file_ind = @@file_ind + 1
+	 end
   	@@event_count = @@event_count + 1
 
     file_output_path = generate_filepath(event)
