@@ -23,14 +23,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # E.g: `/%{myfield}/`, `/test-%{myfield}/` are not valid paths
   config :path, :validate => :string, :required => true
 
-  # The maximum size of file to write. When the file exceeds this
-  # threshold, it will be rotated to the current filename + ".1"
-  # If that file already exists, the previous .1 will shift to .2
-  # and so forth.
-  #
-  # NOT YET SUPPORTED
-  config :max_size, :validate => :string
-
   # The format to use when writing events to the file. This value
   # supports any string and can include `%{name}` and other dynamic
   # strings.
