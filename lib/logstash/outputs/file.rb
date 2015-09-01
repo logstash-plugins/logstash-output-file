@@ -111,7 +111,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         @logger.error("Exception while flushing and closing files.", :exception => e)
       end
     end
-    finished
   end
 
   private
