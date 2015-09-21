@@ -101,8 +101,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end # def receive
 
   public
-  def teardown
-    @logger.debug("Teardown: closing files")
+  def close
+    @logger.debug("Close: closing files")
     @files.each do |path, fd|
       begin
         fd.close
