@@ -82,7 +82,7 @@ describe LogStash::Outputs::File do
 
     it 'doesnt allow the path to start with a dynamic string' do
       expect { output.register }.to raise_error(LogStash::ConfigurationError)
-      output.teardown
+      output.close
     end
 
     context 'doesnt allow the root directory to have some dynamic part' do
@@ -93,7 +93,7 @@ describe LogStash::Outputs::File do
          it "with path: #{test_path}" do
            path = test_path
            expect { output.register }.to raise_error(LogStash::ConfigurationError)
-           output.teardown
+           output.close
          end
        end
     end
@@ -133,7 +133,7 @@ describe LogStash::Outputs::File do
             error_file = File.join(path, config["filename_failure"])
 
             expect(File.exist?(error_file)).to eq(true)
-            output.teardown
+            output.close
           end
         end
 
@@ -152,7 +152,7 @@ describe LogStash::Outputs::File do
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(2)
-            output.teardown
+            output.close
           end
         end
 
@@ -165,7 +165,7 @@ describe LogStash::Outputs::File do
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(1)
-            output.teardown
+            output.close
           end
         end
       end
@@ -183,7 +183,7 @@ describe LogStash::Outputs::File do
 
             good_file = File.join(path, good_event['error'])
             expect(File.exist?(good_file)).to eq(true)
-            output.teardown
+            output.close
           end
         end
 
@@ -201,7 +201,7 @@ describe LogStash::Outputs::File do
             output.receive(good_event)
 
             expect(File.exist?(expected_path)).to eq(true)
-            output.teardown
+            output.close
           end
         end
 
@@ -223,7 +223,7 @@ describe LogStash::Outputs::File do
             output.receive(good_event)
 
             expect(File.exist?(expected_path)).to eq(true)
-            output.teardown
+            output.close
           end
         end
 
@@ -239,7 +239,7 @@ describe LogStash::Outputs::File do
 
             good_file = File.join(path, good_event['error'])
             expect(File.exist?(good_file)).to eq(true)
-            output.teardown
+            output.close
           end
         end
       end
