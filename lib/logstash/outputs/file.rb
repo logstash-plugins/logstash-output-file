@@ -87,7 +87,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   public
   def receive(event)
-    return unless output?(event)
+    
 
     file_output_path = generate_filepath(event)
 
