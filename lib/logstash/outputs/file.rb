@@ -11,6 +11,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   config_name "file"
 
+  attr_reader :failure_path
+
   # The path to the file to write. Event fields can be used here,
   # like `/var/log/logstash/%{host}/%{application}`
   # One may also utilize the path option for date-based log
@@ -42,6 +44,11 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # into this file and inside the defined path.
   config :filename_failure, :validate => :string, :default => '_filepath_failures'
 
+  # If the a file is deleted, but an event is comming with the need to be stored
+  # in such a file, the plugin will created a gain this file. Default => true
+  config :create_if_deleted, :validate => :boolean, :default => true
+ 
+
   public
   def register
     require "fileutils" # For mkdir_p
@@ -56,8 +63,10 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     if path_with_field_ref?
       @file_root = extract_file_root
-      @failure_path = File.join(@file_root, @filename_failure)
+    else
+      @file_root = File.dirname(path)
     end
+    @failure_path = File.join(@file_root, @filename_failure)
 
     now = Time.now
     @last_flush_cycle = now
@@ -87,12 +96,13 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   public
   def receive(event)
-    
 
     file_output_path = generate_filepath(event)
 
     if path_with_field_ref? && !inside_file_root?(file_output_path)
       @logger.warn("File: the event tried to write outside the files root, writing the event to the failure file",  :event => event, :filename => @failure_path)
+      file_output_path = @failure_path
+    elsif !@create_if_deleted && deleted?(file_output_path)
       file_output_path = @failure_path
     end
 
@@ -123,7 +133,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def write_event(log_path, event)
     @logger.debug("File, writing event to file.", :filename => log_path)
     fd = open(log_path)
-
     # TODO(sissel): Check if we should rotate the file.
 
     fd.write(event)
@@ -198,9 +207,27 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   private
-  def open(path)
-    return @files[path] if @files.include?(path) and not @files[path].nil?
+  def cached?(path)
+     @files.include?(path) && !@files[path].nil?
+  end
 
+  private
+  def deleted?(path)
+    !File.exist?(path)
+  end
+
+  private
+  def open(path)
+    if !deleted?(path) && cached?(path)
+      return @files[path]
+    elsif deleted?(path)
+      if @create_if_deleted
+        @logger.debug("Required path was deleted, creating the file again", :path => path)
+        @files.delete(path)
+      else
+        return @files[path] if cached?(path)
+      end
+    end
     @logger.info("Opening file", :path => path)
 
     dir = File.dirname(path)
@@ -208,13 +235,12 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       @logger.info("Creating directory", :directory => dir)
       FileUtils.mkdir_p(dir)
     end
-
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
     if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
       fd = java.io.FileWriter.new(java.io.File.new(path))
     else
-      fd = File.new(path, "a")
+      fd = File.new(path, "a+")
     end
     if gzip
       fd = Zlib::GzipWriter.new(fd)

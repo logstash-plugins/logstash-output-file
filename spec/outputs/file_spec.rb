@@ -6,6 +6,7 @@ require "logstash/json"
 require "stud/temporary"
 require "tempfile"
 require "uri"
+require "fileutils"
 
 describe LogStash::Outputs::File do
   describe "ship lots of events to a file" do
@@ -106,6 +107,58 @@ describe LogStash::Outputs::File do
   end
 
   describe "receiving events" do
+
+    context "when the output file is deleted" do
+
+      let(:temp_file) { Tempfile.new('logstash-spec-output-file_deleted') }
+
+      let(:config) do
+        { "path" => temp_file.path, "flush_interval" => 0 }
+      end
+
+      it "should recreate the required file if deleted" do
+        output = LogStash::Outputs::File.new(config)
+        output.register
+
+        10.times do |i|
+          event = LogStash::Event.new("event_id" => i)
+          output.receive(event)
+        end
+        FileUtils.rm(temp_file)
+        10.times do |i|
+          event = LogStash::Event.new("event_id" => i+10)
+          output.receive(event)
+        end
+        expect(FileTest.size(temp_file.path)).to be > 0
+      end
+
+      context "when appending to the error log" do
+
+        let(:config) do
+          { "path" => temp_file.path, "flush_interval" => 0, "create_if_deleted" => false }
+        end
+
+        it "should append the events to the filename_failure location" do
+          output = LogStash::Outputs::File.new(config)
+          output.register
+
+          10.times do |i|
+            event = LogStash::Event.new("event_id" => i)
+            output.receive(event)
+          end
+          FileUtils.rm(temp_file)
+          10.times do |i|
+            event = LogStash::Event.new("event_id" => i+10)
+            output.receive(event)
+          end
+          expect(FileTest.exist?(temp_file.path)).to be_falsey
+          expect(FileTest.size(output.failure_path)).to be > 0
+        end
+
+      end
+
+    end
+
     context "when using an interpolated path" do
       context "when trying to write outside the files root directory" do
         let(:bad_event) do
