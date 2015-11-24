@@ -1,3 +1,7 @@
+## 2.2.0
+ - Add support for codec, using **json_lines** as default codec to keep default behavior.
+   Ref: https://github.com/logstash-plugins/logstash-output-file/pull/9
+
 ## 2.1.0
  - Add create_if_deleted option to create a destination file in case it
    was deleted by another agent in the machine. In case of being false
