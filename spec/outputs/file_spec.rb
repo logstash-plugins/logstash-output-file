@@ -241,7 +241,7 @@ describe LogStash::Outputs::File do
         end
 
         it 'write the events to a file when some part of a folder or file is dynamic' do
-          t = Time.now
+          t = Time.now.utc
           good_event = LogStash::Event.new("@timestamp" => t)
 
           Stud::Temporary.directory do |path|
@@ -259,7 +259,7 @@ describe LogStash::Outputs::File do
         end
 
         it 'write the events to the generated path containing multiples fieldref' do
-          t = Time.now
+          t = Time.now.utc
           good_event = LogStash::Event.new("error" => 42,
                                            "@timestamp" => t,
                                            "level" => "critical",
