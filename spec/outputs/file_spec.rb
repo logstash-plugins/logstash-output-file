@@ -32,8 +32,9 @@ describe LogStash::Outputs::File do
       line_num = 0
 
       # Now check all events for order and correctness.
-      tmp_file.each_line do |line|
-        event = LogStash::Event.new(LogStash::Json.load(line))
+      events = tmp_file.map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+      sorted = events.sort_by {|e| e['sequence']}
+      sorted.each do |event|
         insist {event["message"]} == "hello world"
         insist {event["sequence"]} == line_num
         line_num += 1
@@ -66,8 +67,9 @@ describe LogStash::Outputs::File do
       agent do
         line_num = 0
         # Now check all events for order and correctness.
-        Zlib::GzipReader.open(tmp_file.path).each_line do |line|
-          event = LogStash::Event.new(LogStash::Json.load(line))
+        events = Zlib::GzipReader.open(tmp_file.path).map {|line| LogStash::Event.new(LogStash::Json.load(line)) }
+        sorted = events.sort_by {|e| e["sequence"]}
+        sorted.each do |event|
           insist {event["message"]} == "hello world"
           insist {event["sequence"]} == line_num
           line_num += 1
