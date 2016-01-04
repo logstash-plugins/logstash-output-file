@@ -1,5 +1,6 @@
 ## 2.2.3
   - Rename Dir.exists? to Dir.exist? to fix deprecation warning
+  - Allow setting dir and file permissions
 
 ## 2.2.1
  - Fixed specs to not depend on pipeline ordering

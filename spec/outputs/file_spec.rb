@@ -361,6 +361,35 @@ describe LogStash::Outputs::File do
           end
         end
       end
+      context "when using file and dir modes" do
+        it 'dirs and files are created with correct atypical permissions' do
+          good_event = LogStash::Event.new
+          good_event['message'] = "hello world"
+
+          Stud::Temporary.directory do |path|
+            config = {
+              "path"      => "#{path}/is/nested/output.txt",
+              "dir_mode"  => 0751,
+              "file_mode" => 0610,
+            }
+            output = LogStash::Outputs::File.new(config)
+            output.register
+            output.receive(good_event)
+            good_file = File.join(path, 'is/nested/output.txt')
+            expect(File.exist?(good_file)).to eq(true)
+            expect(File.stat(good_file).mode.to_s(8)[-3..-1]).to eq('610')
+            first_good_dir = File.join(path, 'is')
+            expect(File.stat(first_good_dir).mode.to_s(8)[-3..-1]).to eq('751')
+            second_good_dir = File.join(path, 'is/nested')
+            expect(File.stat(second_good_dir).mode.to_s(8)[-3..-1]).to eq('751')
+            output.close #teardown first to allow reading the file
+            File.open(good_file) {|f|
+              event = LogStash::Event.new(LogStash::Json.load(f.readline))
+              expect(event["message"]).to eq("hello world")
+            }
+          end
+        end
+      end
     end
   end
 end

@@ -58,6 +58,18 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # in such a file, the plugin will created a gain this file. Default => true
   config :create_if_deleted, :validate => :boolean, :default => true
 
+  # Dir access mode to use. Note that due to the bug in jruby system umask
+  # is ignored on linux: https://github.com/jruby/jruby/issues/3426
+  # Setting it to -1 uses default OS value.
+  # Example: `"dir_mode" => 0750`
+  config :dir_mode, :validate => :number, :default => -1
+
+  # File access mode to use. Note that due to the bug in jruby system umask
+  # is ignored on linux: https://github.com/jruby/jruby/issues/3426
+  # Setting it to -1 uses default OS value.
+  # Example: `"file_mode" => 0640`
+  config :file_mode, :validate => :number, :default => -1
+
   default :codec, "json_lines"
 
   public
@@ -235,14 +247,22 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     dir = File.dirname(path)
     if !Dir.exist?(dir)
       @logger.info("Creating directory", :directory => dir)
-      FileUtils.mkdir_p(dir)
+      if @dir_mode != -1
+        FileUtils.mkdir_p(dir, :mode => @dir_mode)
+      else
+        FileUtils.mkdir_p(dir)
+      end
     end
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
     if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
       fd = java.io.FileWriter.new(java.io.File.new(path))
     else
-      fd = File.new(path, "a+")
+      if @file_mode != -1
+        fd = File.new(path, "a+", @file_mode)
+      else
+        fd = File.new(path, "a+")
+      end
     end
     if gzip
       fd = Zlib::GzipWriter.new(fd)
