@@ -1,3 +1,5 @@
+# 2.2.4
+  - New dependency requirements for logstash-core for the 5.0 release
 ## 2.2.3
   - Rename Dir.exists? to Dir.exist? to fix deprecation warning
   - Allow setting dir and file permissions
