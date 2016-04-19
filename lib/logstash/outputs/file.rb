@@ -54,8 +54,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # into this file and inside the defined path.
   config :filename_failure, :validate => :string, :default => '_filepath_failures'
 
-  # If the a file is deleted, but an event is comming with the need to be stored
-  # in such a file, the plugin will created a gain this file. Default => true
+  # If the configured file is deleted, but an event is handled by the plugin, 
+  # the plugin will recreate the file. Default => true
   config :create_if_deleted, :validate => :boolean, :default => true
 
   # Dir access mode to use. Note that due to the bug in jruby system umask
