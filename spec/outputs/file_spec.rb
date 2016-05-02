@@ -33,10 +33,10 @@ describe LogStash::Outputs::File do
 
       # Now check all events for order and correctness.
       events = tmp_file.map {|line| LogStash::Event.new(LogStash::Json.load(line))}
-      sorted = events.sort_by {|e| e['sequence']}
+      sorted = events.sort_by {|e| e.get('sequence')}
       sorted.each do |event|
-        insist {event["message"]} == "hello world"
-        insist {event["sequence"]} == line_num
+        insist {event.get("message")} == "hello world"
+        insist {event.get("sequence")} == line_num
         line_num += 1
       end
 
@@ -68,10 +68,10 @@ describe LogStash::Outputs::File do
         line_num = 0
         # Now check all events for order and correctness.
         events = Zlib::GzipReader.open(tmp_file.path).map {|line| LogStash::Event.new(LogStash::Json.load(line)) }
-        sorted = events.sort_by {|e| e["sequence"]}
+        sorted = events.sort_by {|e| e.get("sequence")}
         sorted.each do |event|
-          insist {event["message"]} == "hello world"
-          insist {event["sequence"]} == line_num
+          insist {event.get("message")} == "hello world"
+          insist {event.get("sequence")} == line_num
           line_num += 1
         end
         insist {line_num} == event_count
@@ -165,7 +165,7 @@ describe LogStash::Outputs::File do
       context "when trying to write outside the files root directory" do
         let(:bad_event) do
           event = LogStash::Event.new
-          event['error'] = '../uncool/directory'
+          event.set('error', '../uncool/directory')
           event
         end
 
@@ -178,7 +178,7 @@ describe LogStash::Outputs::File do
 
             # Trying to write outside the file root
             outside_path = "#{'../' * path.split(File::SEPARATOR).size}notcool"
-            bad_event["error"] = outside_path
+            bad_event.set("error", outside_path)
 
 
             output = LogStash::Outputs::File.new(config)
@@ -200,10 +200,10 @@ describe LogStash::Outputs::File do
             output = LogStash::Outputs::File.new({ "path" =>  "/#{path}/%{error}"})
             output.register
 
-            bad_event['error'] = encoded_once
+            bad_event.set('error', encoded_once)
             output.receive(bad_event)
 
-            bad_event['error'] = encoded_twice
+            bad_event.set('error', encoded_twice)
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(2)
@@ -216,7 +216,7 @@ describe LogStash::Outputs::File do
             output = LogStash::Outputs::File.new({ "path" =>  "/#{path}/%{error}"})
             output.register
 
-            bad_event['error'] = '../..//test'
+            bad_event.set('error', '../..//test')
             output.receive(bad_event)
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(1)
@@ -228,7 +228,7 @@ describe LogStash::Outputs::File do
       context 'when trying to write inside the file root directory' do
         it 'write the event to the generated filename' do
           good_event = LogStash::Event.new
-          good_event['error'] = '42.txt'
+          good_event.set('error', '42.txt')
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/%{error}" }
@@ -236,7 +236,7 @@ describe LogStash::Outputs::File do
             output.register
             output.receive(good_event)
 
-            good_file = File.join(path, good_event['error'])
+            good_file = File.join(path, good_event.get('error'))
             expect(File.exist?(good_file)).to eq(true)
             output.close
           end
@@ -284,7 +284,7 @@ describe LogStash::Outputs::File do
 
         it 'write the event to the generated filename with multiple deep' do
           good_event = LogStash::Event.new
-          good_event['error'] = '/inside/errors/42.txt'
+          good_event.set('error', '/inside/errors/42.txt')
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/%{error}" }
@@ -292,7 +292,7 @@ describe LogStash::Outputs::File do
             output.register
             output.receive(good_event)
 
-            good_file = File.join(path, good_event['error'])
+            good_file = File.join(path, good_event.get('error'))
             expect(File.exist?(good_file)).to eq(true)
             output.close
           end
@@ -303,7 +303,7 @@ describe LogStash::Outputs::File do
       context "when using default configuration" do
         it 'write the event as a json line' do
           good_event = LogStash::Event.new
-          good_event['message'] = 'hello world'
+          good_event.set('message', 'hello world')
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/output.txt" }
@@ -315,7 +315,7 @@ describe LogStash::Outputs::File do
             output.close #teardown first to allow reading the file
             File.open(good_file) {|f|
               event = LogStash::Event.new(LogStash::Json.load(f.readline))
-              expect(event["message"]).to eq("hello world")
+              expect(event.get("message")).to eq("hello world")
             }
           end
         end
@@ -323,7 +323,7 @@ describe LogStash::Outputs::File do
       context "when using line codec" do
         it 'writes event using specified format' do
           good_event = LogStash::Event.new
-          good_event['message'] = "hello world"
+          good_event.set('message', "hello world")
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/output.txt" }
@@ -344,7 +344,7 @@ describe LogStash::Outputs::File do
       context "when using deprecated message_format config" do
         it 'falls back to line codec' do
           good_event = LogStash::Event.new
-          good_event['message'] = 'hello world'
+          good_event.set('message', 'hello world')
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/output.txt", "message_format" => "Custom format: %{message}" }
@@ -364,7 +364,7 @@ describe LogStash::Outputs::File do
       context "when using file and dir modes" do
         it 'dirs and files are created with correct atypical permissions' do
           good_event = LogStash::Event.new
-          good_event['message'] = "hello world"
+          good_event.set('message', "hello world")
 
           Stud::Temporary.directory do |path|
             config = {
@@ -385,7 +385,7 @@ describe LogStash::Outputs::File do
             output.close #teardown first to allow reading the file
             File.open(good_file) {|f|
               event = LogStash::Event.new(LogStash::Json.load(f.readline))
-              expect(event["message"]).to eq("hello world")
+              expect(event.get("message")).to eq("hello world")
             }
           end
         end
