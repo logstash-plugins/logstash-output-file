@@ -69,6 +69,16 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # Setting it to -1 uses default OS value.
   # Example: `"file_mode" => 0640`
   config :file_mode, :validate => :number, :default => -1
+  
+  # Number of rotation files to use.
+  # 0 or negative values results in no rotation files
+  config :rotate, :validate => :number, :default => 0
+  
+  # when the filesize exceeds the specified amount of bytes, a file rotation 
+  # is triggered on the next write attempt.
+  # negative or zero disables file rotation
+  config :rotate_size, :validate => :number, :default => -1
+  
 
   default :codec, "json_lines"
 
@@ -158,13 +168,34 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     elsif !@create_if_deleted && deleted?(file_output_path)
       file_output_path = @failure_path
     end
+	
+	if rotate_size > 0 && rotate > 0
+		rotate_files(file_output_path)
+	end
+	
     @logger.debug("File, writing event to file.", :filename => file_output_path)
     fd = open(file_output_path)
-    # TODO(sissel): Check if we should rotate the file.
+
+	# TODO(sissel): Check if we should rotate the file.
     fd.write(data)
     flush(fd)
   end
 
+  private 
+  def rotate_files(path)
+    if File.exists?(path) && File.size(path) > rotate_size
+		close()
+		i = rotate
+		while i > 0
+			i-=1
+			if File.exist?(path+".#{i}")
+				File.rename(path+".#{i}", path+".#{i+1}")
+			end
+		end
+		File.rename(path, path+".#{i+1}")
+	end
+  end
+  
   private
   def generate_filepath(event)
     event.sprintf(@path)
