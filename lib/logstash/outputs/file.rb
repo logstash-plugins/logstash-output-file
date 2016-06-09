@@ -193,6 +193,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 			end
 		end
 		File.rename(path, path+".#{i+1}")
+		logger.info("File: filesize exceeded maximum, rotated files.")
 	end
   end
   
