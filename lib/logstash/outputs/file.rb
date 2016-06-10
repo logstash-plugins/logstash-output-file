@@ -74,9 +74,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # 0 or negative values results in no rotation files
   config :rotate, :validate => :number, :default => 0
   
-  # when the filesize exceeds the specified amount of bytes, a file rotation 
+  # When the filesize exceeds the specified amount of megabytes, a file rotation 
   # is triggered on the next write attempt.
-  # negative or zero disables file rotation
+  # Negative or zero disables file rotation
   config :rotate_size, :validate => :number, :default => -1
   
 
@@ -183,7 +183,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   private 
   def rotate_files(path)
-    if File.exists?(path) && File.size(path) > rotate_size
+    if File.exists?(path) && (File.size(path)/1000000.0) > rotate_size
 		close()
 		i = rotate
 		while i > 0
