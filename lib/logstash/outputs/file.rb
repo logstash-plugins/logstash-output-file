@@ -13,7 +13,7 @@ require "zlib"
 # output {
 #  file {
 #    path => ...
-#    codec => { line { format => "custom format: %{message}"}}
+#    codec => line { format => "custom format: %{message}"}
 #  }
 # }
 class LogStash::Outputs::File < LogStash::Outputs::Base
