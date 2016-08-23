@@ -1,3 +1,7 @@
+## 4.0.0
+  - Make 'message_format' option obsolete
+  - Use new Logsash 2.4/5.0 APIs for working batchwise and with shared concurrency
+
 ## 3.0.2
   - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
 
