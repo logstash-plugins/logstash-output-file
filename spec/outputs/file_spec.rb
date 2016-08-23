@@ -47,7 +47,7 @@ describe LogStash::Outputs::File do
 
   describe "ship lots of events to a file gzipped" do
     Stud::Temporary.file('logstash-spec-output-file') do |tmp_file|
-      event_count = 10000 + rand(500)
+      event_count = 100000 + rand(500)
 
       config <<-CONFIG
         input {
@@ -125,13 +125,14 @@ describe LogStash::Outputs::File do
 
         10.times do |i|
           event = LogStash::Event.new("event_id" => i)
-          output.receive(event)
+          output.multi_receive([event])
         end
         FileUtils.rm(temp_file)
         10.times do |i|
           event = LogStash::Event.new("event_id" => i+10)
-          output.receive(event)
+          output.multi_receive([event])
         end
+        
         expect(FileTest.size(temp_file.path)).to be > 0
       end
 
@@ -147,12 +148,12 @@ describe LogStash::Outputs::File do
 
           10.times do |i|
             event = LogStash::Event.new("event_id" => i)
-            output.receive(event)
+            output.multi_receive([event])
           end
           FileUtils.rm(temp_file)
           10.times do |i|
             event = LogStash::Event.new("event_id" => i+10)
-            output.receive(event)
+            output.multi_receive([event])
           end
           expect(FileTest.exist?(temp_file.path)).to be_falsey
           expect(FileTest.size(output.failure_path)).to be > 0
@@ -184,7 +185,7 @@ describe LogStash::Outputs::File do
 
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(bad_event)
+            output.multi_receive([bad_event])
 
             error_file = File.join(path, config["filename_failure"])
 
@@ -202,10 +203,10 @@ describe LogStash::Outputs::File do
             output.register
 
             bad_event.set('error', encoded_once)
-            output.receive(bad_event)
+            output.multi_receive([bad_event])
 
             bad_event.set('error', encoded_twice)
-            output.receive(bad_event)
+            output.multi_receive([bad_event])
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(2)
             output.close
@@ -218,7 +219,7 @@ describe LogStash::Outputs::File do
             output.register
 
             bad_event.set('error', '../..//test')
-            output.receive(bad_event)
+            output.multi_receive([bad_event])
 
             expect(Dir.glob(File.join(path, "*")).size).to eq(1)
             output.close
@@ -235,7 +236,7 @@ describe LogStash::Outputs::File do
             config = { "path" => "#{path}/%{error}" }
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
 
             good_file = File.join(path, good_event.get('error'))
             expect(File.exist?(good_file)).to eq(true)
@@ -254,7 +255,7 @@ describe LogStash::Outputs::File do
             config = { "path" => dynamic_path }
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
 
             expect(File.exist?(expected_path)).to eq(true)
             output.close
@@ -276,7 +277,7 @@ describe LogStash::Outputs::File do
 
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
 
             expect(File.exist?(expected_path)).to eq(true)
             output.close
@@ -291,7 +292,7 @@ describe LogStash::Outputs::File do
             config = { "path" => "#{path}/%{error}" }
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
 
             good_file = File.join(path, good_event.get('error'))
             expect(File.exist?(good_file)).to eq(true)
@@ -310,7 +311,7 @@ describe LogStash::Outputs::File do
             config = { "path" => "#{path}/output.txt" }
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
             good_file = File.join(path, 'output.txt')
             expect(File.exist?(good_file)).to eq(true)
             output.close #teardown first to allow reading the file
@@ -328,30 +329,9 @@ describe LogStash::Outputs::File do
 
           Stud::Temporary.directory do |path|
             config = { "path" => "#{path}/output.txt" }
-            output = LogStash::Outputs::File.new(config)
-            output.codec = LogStash::Codecs::Line.new({ "format" => "Custom format: %{message}"})
+            output = LogStash::Outputs::File.new(config.merge("codec" => LogStash::Codecs::Line.new({ "format" => "Custom format: %{message}"})))
             output.register
-            output.receive(good_event)
-            good_file = File.join(path, 'output.txt')
-            expect(File.exist?(good_file)).to eq(true)
-            output.close #teardown first to allow reading the file
-            File.open(good_file) {|f|
-              line = f.readline
-              expect(line).to eq("Custom format: hello world\n")
-            }
-          end
-        end
-      end
-      context "when using deprecated message_format config" do
-        it 'falls back to line codec' do
-          good_event = LogStash::Event.new
-          good_event.set('message', 'hello world')
-
-          Stud::Temporary.directory do |path|
-            config = { "path" => "#{path}/output.txt", "message_format" => "Custom format: %{message}" }
-            output = LogStash::Outputs::File.new(config)
-            output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
             good_file = File.join(path, 'output.txt')
             expect(File.exist?(good_file)).to eq(true)
             output.close #teardown first to allow reading the file
@@ -375,7 +355,7 @@ describe LogStash::Outputs::File do
             }
             output = LogStash::Outputs::File.new(config)
             output.register
-            output.receive(good_event)
+            output.multi_receive([good_event])
             good_file = File.join(path, 'is/nested/output.txt')
             expect(File.exist?(good_file)).to eq(true)
             expect(File.stat(good_file).mode.to_s(8)[-3..-1]).to eq('610')

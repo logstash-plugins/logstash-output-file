@@ -17,6 +17,8 @@ require "zlib"
 #  }
 # }
 class LogStash::Outputs::File < LogStash::Outputs::Base
+  concurrency :shared
+  
   FIELD_REF = /%\{[^}]+\}/
 
   config_name "file"
@@ -35,13 +37,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # E.g: `/%{myfield}/`, `/test-%{myfield}/` are not valid paths
   config :path, :validate => :string, :required => true
 
-  # The format to use when writing events to the file. This value
-  # supports any string and can include `%{name}` and other dynamic
-  # strings.
-  #
-  # If this setting is omitted, the full json representation of the
-  # event will be written as a single line.
-  config :message_format, :validate => :string, :deprecated => "You can achieve the same behavior with the 'line' codec"
+  config :message_format, :validate => :string, :obsolete => "You can achieve the same behavior with the 'line' codec"
 
   # Flush interval (in seconds) for flushing writes to log files.
   # 0 will flush on every message.
@@ -76,10 +72,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def register
     require "fileutils" # For mkdir_p
 
-    workers_not_supported
-
     @files = {}
-
+    @io_mutex = Mutex.new
+    
     @path = File.expand_path(path)
 
     validate_path
@@ -91,6 +86,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
     @failure_path = File.join(@file_root, @filename_failure)
 
+
     now = Time.now
     @last_flush_cycle = now
     @last_stale_cleanup_cycle = now
@@ -101,8 +97,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
      @codec = LogStash::Plugin.lookup("codec", "line").new
      @codec.format = @message_format
     end
-
-    @codec.on_event(&method(:write_event))
   end # def register
 
   private
@@ -125,20 +119,37 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   public
-  def receive(event)
-    @codec.encode(event)
-    close_stale_files
+  def multi_receive_encoded(events_and_encoded)
+    encoded_by_path = Hash.new {|h,k| h[k] = []}
+
+    events_and_encoded.each do |event,encoded|
+      file_output_path = event_path(event)
+      encoded_by_path[file_output_path] << encoded
+    end
+
+    @io_mutex.synchronize do
+      encoded_by_path.each do |path,chunks|
+        fd = open(path)
+        chunks.each {|chunk| fd.write(chunk) }
+        fd.flush
+      end
+      
+      close_stale_files
+    end   
   end # def receive
 
   public
   def close
-    @logger.debug("Close: closing files")
-    @files.each do |path, fd|
-      begin
-        fd.close
-        @logger.debug("Closed file #{path}", :fd => fd)
-      rescue Exception => e
-        @logger.error("Exception while flushing and closing files.", :exception => e)
+    @io_mutex.synchronize do
+      @logger.debug("Close: closing files")
+      
+      @files.each do |path, fd|
+        begin
+          fd.close
+          @logger.debug("Closed file #{path}", :fd => fd)
+        rescue Exception => e
+          @logger.error("Exception while flushing and closing files.", :exception => e)
+        end
       end
     end
   end
@@ -150,7 +161,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   private
-  def write_event(event, data)
+  def event_path(event)
     file_output_path = generate_filepath(event)
     if path_with_field_ref? && !inside_file_root?(file_output_path)
       @logger.warn("File: the event tried to write outside the files root, writing the event to the failure file",  :event => event, :filename => @failure_path)
@@ -159,10 +170,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       file_output_path = @failure_path
     end
     @logger.debug("File, writing event to file.", :filename => file_output_path)
-    fd = open(file_output_path)
-    # TODO(sissel): Check if we should rotate the file.
-    fd.write(data)
-    flush(fd)
+    
+    file_output_path    
   end
 
   private
@@ -195,10 +204,12 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def flush_pending_files
     return unless Time.now - @last_flush_cycle >= flush_interval
     @logger.debug("Starting flush cycle")
+
     @files.each do |path, fd|
       @logger.debug("Flushing file", :path => path, :fd => fd)
       fd.flush
     end
+    
     @last_flush_cycle = Time.now
   end
 
@@ -207,6 +218,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def close_stale_files
     now = Time.now
     return unless now - @last_stale_cleanup_cycle >= @stale_cleanup_interval
+
     @logger.info("Starting stale files cleanup cycle", :files => @files)
     inactive_files = @files.select { |path, fd| not fd.active }
     @logger.debug("%d stale files found" % inactive_files.count, :inactive_files => inactive_files)
@@ -222,7 +234,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   private
   def cached?(path)
-     @files.include?(path) && !@files[path].nil?
+    @files.include?(path) && !@files[path].nil?
   end
 
   private
@@ -234,7 +246,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def open(path)
     if !deleted?(path) && cached?(path)
       return @files[path]
-    elsif deleted?(path)
+    end
+
+    if deleted?(path)
       if @create_if_deleted
         @logger.debug("Required path was deleted, creating the file again", :path => path)
         @files.delete(path)
@@ -242,8 +256,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         return @files[path] if cached?(path)
       end
     end
-    @logger.info("Opening file", :path => path)
 
+    @logger.info("Opening file", :path => path)
+    
     dir = File.dirname(path)
     if !Dir.exist?(dir)
       @logger.info("Creating directory", :directory => dir)
@@ -253,6 +268,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         FileUtils.mkdir_p(dir)
       end
     end
+    
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
     if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
@@ -288,6 +304,7 @@ class IOWriter
   end
   def method_missing(method_name, *args, &block)
     if @io.respond_to?(method_name)
+
       @io.send(method_name, *args, &block)
     else
       super
