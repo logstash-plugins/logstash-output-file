@@ -1,21 +1,28 @@
+## 4.0.1
+ - restore: Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
+
 ## 4.0.0
-  - Make 'message_format' option obsolete
-  - Use new Logsash 2.4/5.0 APIs for working batchwise and with shared concurrency
+ - Make 'message_format' option obsolete
+ - Use new Logstash 2.4/5.0 APIs for working batchwise and with shared concurrency
 
 ## 3.0.2
-  - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
+ - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
 
 ## 3.0.1
-  - Republish all the gems under jruby.
+ - Republish all the gems under jruby.
+
 ## 3.0.0
-  - Update the plugin to the version 2.0 of the plugin api, this change is required for Logstash 5.0 compatibility. See https://github.com/elastic/logstash/issues/5141
-# 2.2.5
-  - Depend on logstash-core-plugin-api instead of logstash-core, removing the need to mass update plugins on major releases of logstash
-# 2.2.4
-  - New dependency requirements for logstash-core for the 5.0 release
+ - Update the plugin to the version 2.0 of the plugin api, this change is required for Logstash 5.0 compatibility. See https://github.com/elastic/logstash/issues/5141
+
+## 2.2.5
+ - Depend on logstash-core-plugin-api instead of logstash-core, removing the need to mass update plugins on major releases of logstash
+
+## 2.2.4
+ - New dependency requirements for logstash-core for the 5.0 release
+
 ## 2.2.3
-  - Rename Dir.exists? to Dir.exist? to fix deprecation warning
-  - Allow setting dir and file permissions
+ - Rename Dir.exists? to Dir.exist? to fix deprecation warning
+ - Allow setting dir and file permissions
 
 ## 2.2.1
  - Fixed specs to not depend on pipeline ordering
