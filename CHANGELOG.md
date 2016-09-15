@@ -1,3 +1,6 @@
+## 4.0.1
+  - Move one log message from info to debug to avoid noise
+
 ## 4.0.0
   - Make 'message_format' option obsolete
   - Use new Logsash 2.4/5.0 APIs for working batchwise and with shared concurrency
