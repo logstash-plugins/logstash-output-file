@@ -2,6 +2,7 @@
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/outputs/file"
 require "logstash/codecs/line"
+require "logstash/codecs/json_lines"
 require "logstash/event"
 require "logstash/json"
 require "stud/temporary"
@@ -110,6 +111,49 @@ describe LogStash::Outputs::File do
   end
 
   describe "receiving events" do
+
+    context "when write_behavior => 'overwrite'" do
+      let(:tmp) { Stud::Temporary.pathname }
+      let(:config) {
+        { 
+          "write_behavior" => "overwrite",
+          "path" => tmp,
+          "codec" => LogStash::Codecs::JSONLines.new
+        }
+      }
+      let(:output) { LogStash::Outputs::File.new(config) }
+
+      let(:count) { Flores::Random.integer(1..10) }
+      let(:events) do 
+        Flores::Random.iterations(1..10).collect do |i|
+          LogStash::Event.new("value" => i)
+        end
+      end
+
+      before do
+        output.register
+      end
+
+      after do
+        File.unlink(tmp) if File.exist?(tmp)
+      end
+
+      it "should write only the last event of a batch" do
+        output.multi_receive(events)
+        result = LogStash::Json.load(File.read(tmp))
+        expect(result["value"]).to be == events.last.get("value")
+      end
+
+      context "the file" do
+        it "should only contain the last event received" do
+          events.each do |event|
+            output.multi_receive([event])
+            result = LogStash::Json.load(File.read(tmp))
+            expect(result["value"]).to be == event.get("value")
+          end
+        end
+      end
+    end
 
     context "when the output file is deleted" do
 
