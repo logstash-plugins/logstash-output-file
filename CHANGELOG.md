@@ -1,3 +1,8 @@
+## 4.2.0
+  - New `write_behavior` feature. Value can be "append" (default) or
+    "overwrite". If "append", events will be appended to the end of the file.
+    If "overwrite", the file will only contain the last event written.
+
 ## 4.1.2
   - Update gemspec summary
 
