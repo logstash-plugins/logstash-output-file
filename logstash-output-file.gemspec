@@ -1,7 +1,7 @@
 Gem::Specification.new do |s|
 
   s.name            = 'logstash-output-file'
-  s.version         = '4.0.1'
+  s.version         = '4.1.0'
   s.licenses        = ['Apache License (2.0)']
   s.summary         = "This output will write events to files on disk"
   s.description     = "This gem is a Logstash plugin required to be installed on top of the Logstash core pipeline using $LS_HOME/bin/logstash-plugin install gemname. This gem is not a stand-alone program"
@@ -25,5 +25,6 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency 'logstash-codec-line'
 
   s.add_development_dependency 'logstash-devutils'
+  s.add_development_dependency 'flores'
   s.add_development_dependency 'logstash-input-generator'
 end

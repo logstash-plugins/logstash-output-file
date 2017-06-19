@@ -1,6 +1,7 @@
 # encoding: utf-8
 require "logstash/namespace"
 require "logstash/outputs/base"
+require "flores/random"
 require "logstash/errors"
 require "zlib"
 
@@ -66,6 +67,16 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # Example: `"file_mode" => 0640`
   config :file_mode, :validate => :number, :default => -1
 
+
+  # How should the file be written?
+  #
+  # If `append`, the file will be opened for appending and each new event will
+  # be written at the end of the file.
+  #
+  # If `overwrite`, the file will be truncated before writing and only the most
+  # recent event will appear in the file.
+  config :write_behavior, :validate => [ "overwrite", "append" ], :default => "append"
+
   default :codec, "json_lines"
 
   public
@@ -130,7 +141,14 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @io_mutex.synchronize do
       encoded_by_path.each do |path,chunks|
         fd = open(path)
-        chunks.each {|chunk| fd.write(chunk) }
+        if @write_behavior == "overwrite"
+          fd.truncate(0)
+          fd.seek(0, IO::SEEK_SET)
+          fd.write(chunks.last)
+        else
+          # append to the file
+          chunks.each {|chunk| fd.write(chunk) }
+        end
         fd.flush
       end
       
