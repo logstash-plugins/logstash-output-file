@@ -37,8 +37,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # E.g: `/%{myfield}/`, `/test-%{myfield}/` are not valid paths
   config :path, :validate => :string, :required => true
 
-  config :message_format, :validate => :string, :obsolete => "You can achieve the same behavior with the 'line' codec"
-
   # Flush interval (in seconds) for flushing writes to log files.
   # 0 will flush on every message.
   config :flush_interval, :validate => :number, :default => 2
@@ -92,11 +90,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @last_stale_cleanup_cycle = now
     @flush_interval = @flush_interval.to_i
     @stale_cleanup_interval = 10
-
-    if @message_format
-     @codec = LogStash::Plugin.lookup("codec", "line").new
-     @codec.format = @message_format
-    end
   end # def register
 
   private
