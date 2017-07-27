@@ -1,3 +1,6 @@
+## 4.1.0
+  - Remove obsolete option `message_format`
+
 ## 4.0.1
   - Move one log message from info to debug to avoid noise
 
