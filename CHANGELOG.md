@@ -1,3 +1,6 @@
+## 4.1.1
+  - Fix some documentation issues
+
 ## 4.1.0
   - Remove obsolete option `message_format`
 
