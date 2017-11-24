@@ -1,3 +1,6 @@
+## 4.2.1
+  - Bugfix: Move require of flores into the spec file instead of main file.rb
+
 ## 4.2.0
   - New `write_behavior` feature. Value can be "append" (default) or
     "overwrite". If "append", events will be appended to the end of the file.

@@ -9,6 +9,7 @@ require "stud/temporary"
 require "tempfile"
 require "uri"
 require "fileutils"
+require "flores/random"
 
 describe LogStash::Outputs::File do
   describe "ship lots of events to a file" do

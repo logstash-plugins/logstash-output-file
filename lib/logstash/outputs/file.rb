@@ -1,7 +1,6 @@
 # encoding: utf-8
 require "logstash/namespace"
 require "logstash/outputs/base"
-require "flores/random"
 require "logstash/errors"
 require "zlib"
 
