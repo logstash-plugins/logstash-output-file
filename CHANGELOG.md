@@ -1,3 +1,6 @@
+## 4.2.2
+  - Add feature `write_behavior` to the documentation #58
+
 ## 4.2.1
   - Bugfix: Move require of flores into the spec file instead of main file.rb
 
