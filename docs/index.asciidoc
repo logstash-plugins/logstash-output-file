@@ -1,5 +1,6 @@
 :plugin: file
 :type: output
+:default_codec: json_lines
 
 ///////////////////////////////////////////
 START - GENERATED VARIABLES, DO NOT EDIT!
@@ -142,3 +143,5 @@ If `overwrite`, the file will be truncated before writing and only the most rece
 
 [id="plugins-{type}s-{plugin}-common-options"]
 include::{include_path}/{type}.asciidoc[]
+
+:default_codec!:

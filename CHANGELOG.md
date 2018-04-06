@@ -1,3 +1,6 @@
+## 4.2.3
+  - Docs: Set the default_codec doc attribute.
+
 ## 4.2.2
   - Add feature `write_behavior` to the documentation #58
 
