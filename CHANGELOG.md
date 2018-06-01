@@ -1,3 +1,6 @@
+## 4.2.4
+  - Fix a bug where flush interval was being called for each event when enabled #67
+
 ## 4.2.3
   - Docs: Set the default_codec doc attribute.
 
