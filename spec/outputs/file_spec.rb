@@ -119,7 +119,8 @@ describe LogStash::Outputs::File do
         { 
           "write_behavior" => "overwrite",
           "path" => tmp,
-          "codec" => LogStash::Codecs::JSONLines.new
+          "codec" => LogStash::Codecs::JSONLines.new,
+          "flush_interval" => 0
         }
       }
       let(:output) { LogStash::Outputs::File.new(config) }
