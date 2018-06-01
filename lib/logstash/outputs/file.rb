@@ -18,7 +18,7 @@ require "zlib"
 # }
 class LogStash::Outputs::File < LogStash::Outputs::Base
   concurrency :shared
-  
+
   FIELD_REF = /%\{[^}]+\}/
 
   config_name "file"
@@ -48,7 +48,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # into this file and inside the defined path.
   config :filename_failure, :validate => :string, :default => '_filepath_failures'
 
-  # If the configured file is deleted, but an event is handled by the plugin, 
+  # If the configured file is deleted, but an event is handled by the plugin,
   # the plugin will recreate the file. Default => true
   config :create_if_deleted, :validate => :boolean, :default => true
 
@@ -82,7 +82,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     @files = {}
     @io_mutex = Mutex.new
-    
+
     @path = File.expand_path(path)
 
     validate_path
@@ -141,18 +141,18 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
           # append to the file
           chunks.each {|chunk| fd.write(chunk) }
         end
-        fd.flush
+        flush(fd)
       end
-      
+
       close_stale_files
-    end   
+    end
   end # def receive
 
   public
   def close
     @io_mutex.synchronize do
       @logger.debug("Close: closing files")
-      
+
       @files.each do |path, fd|
         begin
           fd.close
@@ -180,8 +180,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       file_output_path = @failure_path
     end
     @logger.debug("File, writing event to file.", :filename => file_output_path)
-    
-    file_output_path    
+
+    file_output_path
   end
 
   private
@@ -219,7 +219,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       @logger.debug("Flushing file", :path => path, :fd => fd)
       fd.flush
     end
-    
+
     @last_flush_cycle = Time.now
   end
 
@@ -268,7 +268,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
 
     @logger.info("Opening file", :path => path)
-    
+
     dir = File.dirname(path)
     if !Dir.exist?(dir)
       @logger.info("Creating directory", :directory => dir)
@@ -278,7 +278,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         FileUtils.mkdir_p(dir)
       end
     end
-    
+
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
     if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
