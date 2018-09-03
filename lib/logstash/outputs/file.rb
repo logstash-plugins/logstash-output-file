@@ -135,15 +135,14 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     @io_mutex.synchronize do
       encoded_by_path.each do |path,chunks|
+        fd = open(path)
         if @write_behavior == "overwrite"
-          fd = open(path, false)
           fd.truncate(0)
           fd.seek(0, IO::SEEK_SET)
           fd.write(chunks.last)
         else
-          fd = open(path)
           # append to the file
-          chunks.each {|chunk| fd.write(chunk) }
+          fd.write(chunks.join(""))
         end
         fd.flush unless @flusher && @flusher.alive?
       end
@@ -251,23 +250,19 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   private
-  def open(path, lazy=true)
+  def open(path)
     if cached?(path)
-      if lazy
-        if @create_if_deleted
-          @files[path].set_opener(lambda { open_fd(path) if deleted?(path) })
-        end
-        return @files[path]
-      end
-      if (!@create_if_deleted) || (!deleted?(path))
-        return @files[path]
-      end
-      @files[path].flush
-      @files.delete(path)
-      @logger.debug("Required path was deleted, creating the file again", :path => path)
+      return @files[path]
     end
+    @files[path] = IOWriter.new(open_fd(path), @buffer_size, lambda { recreate(path) })
+  end
 
-    @files[path] = IOWriter.new(open_fd(path), @buffer_size)
+  private
+  def recreate(path)
+    if @create_if_deleted && deleted?(path)
+      @logger.debug("Required path was deleted, creating the file again", :path => path)
+      open_fd(path)
+    end
   end
 
   private
@@ -377,62 +372,64 @@ end # class LogStash::Outputs::File
 
 # wrapper class
 class IOWriter
-  def initialize(io, buffer_size)
+  def initialize(io, buffer_size, recreate)
     @io = io
     @buffers = []
     @size = 0
     @limit = buffer_size
-    @opener = nil
+    @recreate = recreate
   end
-  def set_opener(opener)
-    @opener = opener
-  end
+
   private
   def reopen
-    if !(@opener.nil?)
-      fd = @opener.call
-      if !(fd.nil?)
-        do_flush
-        @io.close
-        @io = fd
+    fd = @recreate.call
+    if !(fd.nil?)
+      @io.flush
+      if @io.class == Zlib::GzipWriter
+        @io.to_io.flush
       end
-      @opener = nil
+      @io.close
+      @io = fd
     end
   end
+
   public
   def write(*args)
-    # @io.write(*args)
     args.each do |arg|
       @size += arg.bytesize
       @buffers.push(arg)
     end
     if (@limit >= 0) and (@size > @limit)
-      reopen
       do_write
     end
     @active = true
   end
+
   private
   def do_write
-    @io.write(@buffers.join(""))
-    @buffers = []
-    @size = 0
+    if @size > 0
+      reopen
+      @io.write(@buffers.join(""))
+      @buffers = []
+      @size = 0
+    end
   end
+
   public
   def flush
-    reopen
-    if @size > 0
-      do_write
-    end
-    do_flush
-  end
-  private
-  def do_flush
+    do_write
     @io.flush
     if @io.class == Zlib::GzipWriter
       @io.to_io.flush
     end
   end
+
+  public
+  def truncate(length)
+    reopen
+    @io.truncate(length)
+  end
+
   public
   def close
     flush
