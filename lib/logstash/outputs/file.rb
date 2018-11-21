@@ -276,7 +276,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
-    if stat && stat.ftype == "fifo" && LogStash::Environment.jruby?
+    if stat && stat.ftype == "fifo"
       fd = java.io.FileWriter.new(java.io.File.new(path))
     else
       if @file_mode != -1
