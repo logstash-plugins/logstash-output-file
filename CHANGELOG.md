@@ -1,3 +1,6 @@
+## 4.2.6
+  - Removed JRuby check when using FIFOs [#75](https://github.com/logstash-plugins/logstash-output-file/pull/75)
+
 ## 4.2.5
   - Fix a bug introduced in v4.2.4 where events on low-volume pipelines could remain unflushed for long periods when `flush_interval` was non-zero [#70](https://github.com/logstash-plugins/logstash-output-file/pull/70)
 
