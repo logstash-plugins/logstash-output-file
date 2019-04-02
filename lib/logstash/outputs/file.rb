@@ -135,8 +135,10 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       encoded_by_path.each do |path,chunks|
         fd = open(path)
         if @write_behavior == "overwrite"
-          fd.truncate(0)
-          fd.seek(0, IO::SEEK_SET)
+          File.truncate(path, 0)
+          if !fd.kind_of? IOWriter
+            fd.seek(0, IO::SEEK_SET)
+          end
           fd.write(chunks.last)
         else
           # append to the file
