@@ -76,7 +76,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   default :codec, "json_lines"
 
-  public
   def register
     require "fileutils" # For mkdir_p
 
@@ -101,28 +100,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     @last_stale_cleanup_cycle = Time.now
     @stale_cleanup_interval = 10
-  end # def register
-
-  private
-  def validate_path
-    if (root_directory =~ FIELD_REF) != nil
-      @logger.error("File: The starting part of the path should not be dynamic.", :path => @path)
-      raise LogStash::ConfigurationError.new("The starting part of the path should not be dynamic.")
-    end
   end
 
-  private
-  def root_directory
-    parts = @path.split(File::SEPARATOR).select { |item| !item.empty?  }
-    if Gem.win_platform?
-      # First part is the drive letter
-      parts[1]
-    else
-      parts.first
-    end
-  end
-
-  public
   def multi_receive_encoded(events_and_encoded)
     encoded_by_path = Hash.new {|h,k| h[k] = []}
 
@@ -147,9 +126,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
       close_stale_files
     end
-  end # def receive
+  end
 
-  public
   def close
     @flusher.stop unless @flusher.nil?
     @io_mutex.synchronize do
@@ -167,12 +145,29 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   private
+
+  def validate_path
+    if (root_directory =~ FIELD_REF) != nil
+      @logger.error("File: The starting part of the path should not be dynamic.", :path => @path)
+      raise LogStash::ConfigurationError.new("The starting part of the path should not be dynamic.")
+    end
+  end
+
+  def root_directory
+    parts = @path.split(File::SEPARATOR).select { |item| !item.empty?  }
+    if Gem.win_platform?
+      # First part is the drive letter
+      parts[1]
+    else
+      parts.first
+    end
+  end
+
   def inside_file_root?(log_path)
     target_file = File.expand_path(log_path)
     return target_file.start_with?("#{@file_root.to_s}/")
   end
 
-  private
   def event_path(event)
     file_output_path = generate_filepath(event)
     if path_with_field_ref? && !inside_file_root?(file_output_path)
@@ -186,24 +181,20 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     file_output_path
   end
 
-  private
   def generate_filepath(event)
     event.sprintf(@path)
   end
 
-  private
   def path_with_field_ref?
     path =~ FIELD_REF
   end
 
-  private
   def extract_file_root
     parts = File.expand_path(path).split(File::SEPARATOR)
     parts.take_while { |part| part !~ FIELD_REF }.join(File::SEPARATOR)
   end
 
   # the back-bone of @flusher, our periodic-flushing interval.
-  private
   def flush_pending_files
     @io_mutex.synchronize do
       @logger.debug("Starting flush cycle")
@@ -219,7 +210,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   # every 10 seconds or so (triggered by events, but if there are no events there's no point closing files anyway)
-  private
   def close_stale_files
     now = Time.now
     return unless now - @last_stale_cleanup_cycle >= @stale_cleanup_interval
@@ -237,17 +227,14 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @last_stale_cleanup_cycle = now
   end
 
-  private
   def cached?(path)
     @files.include?(path) && !@files[path].nil?
   end
 
-  private
   def deleted?(path)
     !File.exist?(path)
   end
 
-  private
   def open(path)
     if !deleted?(path) && cached?(path)
       return @files[path]
@@ -362,24 +349,29 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     ensure
       @sleeper.broadcast
     end
-  end # class LogStash::Outputs::File::Interval
-end # class LogStash::Outputs::File
+  end
+end
 
 # wrapper class
 class IOWriter
+  attr_accessor :active
+
   def initialize(io)
     @io = io
   end
+
   def write(*args)
     @io.write(*args)
     @active = true
   end
+
   def flush
     @io.flush
     if @io.class == Zlib::GzipWriter
       @io.to_io.flush
     end
   end
+
   def method_missing(method_name, *args, &block)
     if @io.respond_to?(method_name)
 
@@ -388,5 +380,4 @@ class IOWriter
       super
     end
   end
-  attr_accessor :active
 end
