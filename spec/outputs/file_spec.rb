@@ -69,9 +69,21 @@ describe LogStash::Outputs::File do
 
       agent do
         line_num = 0
+        global_events = []
         # Now check all events for order and correctness.
-        events = Zlib::GzipReader.open(tmp_file.path).map {|line| LogStash::Event.new(LogStash::Json.load(line)) }
-        sorted = events.sort_by {|e| e.get("sequence")}
+        File.open(tmp_file.path) do |file|
+          zio = file
+          loop do
+            io = Zlib::GzipReader.new(zio)
+            events = io.map {|line| LogStash::Event.new(LogStash::Json.load(line)) }
+            global_events = global_events + events
+            unused = io.unused
+            io.finish
+            break if unused.nil?
+            zio.pos -= unused.length
+          end
+        end
+        sorted = global_events.sort_by {|e| e.get("sequence")}
         sorted.each do |event|
           insist {event.get("message")} == "hello world"
           insist {event.get("sequence")} == line_num
