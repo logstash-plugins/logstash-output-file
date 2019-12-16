@@ -1,3 +1,6 @@
+## Unreleased
+  - CI: upgrade testing [#83](https://github.com/logstash-plugins/logstash-output-file/pull/83)
+
 ## 4.2.6
   - Removed JRuby check when using FIFOs [#75](https://github.com/logstash-plugins/logstash-output-file/pull/75)
 
