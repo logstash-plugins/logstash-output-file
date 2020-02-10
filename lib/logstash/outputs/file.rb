@@ -74,6 +74,15 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # recent event will appear in the file.
   config :write_behavior, :validate => [ "overwrite", "append" ], :default => "append"
 
+  # Size based file rotation
+  #
+  # Set the filesize in `bytes` after which the file is automatically rotated.
+  # The rotation automatically appends a number ending  .1, .2, .3 ... to the
+  # file name.
+  #
+  # If set to `file_rotation_size => 0` no rotation will be performed
+  config :file_rotation_size, :validate => :number, :default => 0
+
   default :codec, "json_lines"
 
   def register
@@ -85,6 +94,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @path = File.expand_path(path)
 
     validate_path
+    validate_file_rotation_size
 
     if path_with_field_ref?
       @file_root = extract_file_root
@@ -153,6 +163,13 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
   end
 
+  def validate_file_rotation_size
+    if (file_rotation_size < 0)
+      @logger.error("File: The file_rotation_size must not be a negative number", :file_rotation_size => @file_rotation_size)
+      raise LogStash::ConfigurationError.new("The file_rotation_size must not be a negative number.")
+    end
+  end
+
   def root_directory
     parts = @path.split(File::SEPARATOR).select { |item| !item.empty?  }
     if Gem.win_platform?
@@ -170,12 +187,47 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
   def event_path(event)
     file_output_path = generate_filepath(event)
+
+    if (file_rotation_size > 0)
+      @io_mutex.synchronize do
+        # Check current size
+        if (File.exist?(file_output_path) && File.stat(file_output_path).size > file_rotation_size)
+          puts "Start file rotation..."
+          finished = false
+          cnt = 0
+          while File.exist?("#{file_output_path}.#{cnt}")
+            cnt += 1
+          end
+
+          # Flush file
+          if (@files.include?(file_output_path))
+            puts "Flush file: #{file_output_path}..."
+            @files[file_output_path].flush
+            @files[file_output_path].close
+            @files.delete(file_output_path)
+          end
+          puts "Having: #{cnt} rotations"
+          until cnt == 0
+            puts "Move file: #{file_output_path}.#{cnt -1 } =>  #{file_output_path}.#{cnt}"
+            File.rename("#{file_output_path}.#{cnt -1}", "#{file_output_path}.#{cnt}")
+            cnt -= 1
+          end
+          if (File.exist?("#{file_output_path}"))
+            puts "Final move file: #{file_output_path} =>  #{file_output_path}.0"
+            File.rename("#{file_output_path}", "#{file_output_path}.0")
+          end
+          puts "Finished rotation."
+        end
+      end
+    end
+
     if path_with_field_ref? && !inside_file_root?(file_output_path)
       @logger.warn("File: the event tried to write outside the files root, writing the event to the failure file",  :event => event, :filename => @failure_path)
       file_output_path = @failure_path
     elsif !@create_if_deleted && deleted?(file_output_path)
       file_output_path = @failure_path
     end
+
     @logger.debug("File, writing event to file.", :filename => file_output_path)
 
     file_output_path
@@ -202,6 +254,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       @files.each do |path, fd|
         @logger.debug("Flushing file", :path => path, :fd => fd)
         fd.flush
+        fd.close
+        @files.delete(path)
       end
     end
   rescue => e

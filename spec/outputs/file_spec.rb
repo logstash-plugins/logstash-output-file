@@ -83,6 +83,56 @@ describe LogStash::Outputs::File do
     end
   end
 
+  describe "handle 'file_rotation_size setting'" do
+    tmp_file = Tempfile.new('logstash-spec-output-file')
+    event_count = 3000000
+    file_rotation_size = 1024*1024
+
+    config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+        }
+      }
+    CONFIG
+
+    agent do
+      line_num = 0
+      # Now check all events for order and correctness.
+      puts "AAA: #{tmp_file.path}"
+
+      max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
+      cnt = 0
+
+      puts "Check: #{File.stat("#{tmp_file.path}").size} < #{max_tolarated_size}"
+      insist { File.stat("#{tmp_file.path}").size } < max_tolarated_size
+
+      while File.exists?("#{tmp_file.path}.#{cnt}") do
+        actual_size = File.stat("#{tmp_file.path}.#{cnt}").size
+        puts "Actual size: #{actual_size} Max: #{max_tolarated_size} Configured: #{file_rotation_size} Ratio: #{(actual_size.to_f/file_rotation_size.to_f)}  "
+        insist { actual_size } < max_tolarated_size
+        cnt += 1
+      end
+      # events = tmp_file.map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+      # sorted = events.sort_by {|e| e.get('sequence')}
+      # sorted.each do |event|
+        # insist {event.get("message")} == "hello world"
+        # insist {event.get("sequence")} == line_num
+        # line_num += 1
+      # end
+
+      # insist {line_num} == event_count
+    end # agent
+  end
+
   describe "#register" do
     let(:path) { '/%{name}' }
     let(:output) { LogStash::Outputs::File.new({ "path" => path }) }
@@ -110,6 +160,11 @@ describe LogStash::Outputs::File do
       output = LogStash::Outputs::File.new({ "path" => path })
       expect { output.register }.not_to raise_error
     end
+
+    it 'does not allow negative "file_rotation_size"' do
+      output = LogStash::Outputs::File.new({ "path" => '/tmp/%{name}', "file_rotation_size" => -1 })
+      expect { output.register }.to raise_error(LogStash::ConfigurationError)
+    end
   end
 
   describe "receiving events" do
@@ -117,7 +172,7 @@ describe LogStash::Outputs::File do
     context "when write_behavior => 'overwrite'" do
       let(:tmp) { Stud::Temporary.pathname }
       let(:config) {
-        { 
+        {
           "write_behavior" => "overwrite",
           "path" => tmp,
           "codec" => LogStash::Codecs::JSONLines.new,
@@ -127,7 +182,7 @@ describe LogStash::Outputs::File do
       let(:output) { LogStash::Outputs::File.new(config) }
 
       let(:count) { Flores::Random.integer(1..10) }
-      let(:events) do 
+      let(:events) do
         Flores::Random.iterations(1..10).collect do |i|
           LogStash::Event.new("value" => i)
         end
@@ -179,7 +234,7 @@ describe LogStash::Outputs::File do
           event = LogStash::Event.new("event_id" => i+10)
           output.multi_receive([event])
         end
-        
+
         expect(FileTest.size(temp_file.path)).to be > 0
       end
 
