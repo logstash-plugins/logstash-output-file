@@ -83,12 +83,13 @@ describe LogStash::Outputs::File do
     end
   end
 
-  describe "handle 'file_rotation_size setting'" do
-    tmp_file = Tempfile.new('logstash-spec-output-file')
-    event_count = 3000000
-    file_rotation_size = 1024*1024
+  describe "handle 'file_rotation_size' setting" do
+    describe "create files of configured maximum size (5% tolerance)" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 300000
+      file_rotation_size = 1024*1024
 
-    config <<-CONFIG
+      config <<-CONFIG
       input {
         generator {
           message => "hello world"
@@ -102,35 +103,78 @@ describe LogStash::Outputs::File do
           file_rotation_size => #{file_rotation_size}
         }
       }
-    CONFIG
+      CONFIG
 
-    agent do
-      line_num = 0
-      # Now check all events for order and correctness.
-      puts "AAA: #{tmp_file.path}"
+      agent do
+        line_num = 0
+        # Check that files are within 5% size tolerance
+        max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
+        cnt = 0
 
-      max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
-      cnt = 0
+        puts "Check: #{File.stat("#{tmp_file.path}").size} < #{max_tolarated_size}"
+        insist { File.stat("#{tmp_file.path}").size } < max_tolarated_size
 
-      puts "Check: #{File.stat("#{tmp_file.path}").size} < #{max_tolarated_size}"
-      insist { File.stat("#{tmp_file.path}").size } < max_tolarated_size
+        while File.exists?("#{tmp_file.path}.#{cnt}") do
+          actual_size = File.stat("#{tmp_file.path}.#{cnt}").size
+          puts "Actual size: #{actual_size} Max: #{max_tolarated_size} Configured: #{file_rotation_size} ratio: #{((((actual_size.to_f/file_rotation_size.to_f))*100)-100).round(3)}%"
+          insist { actual_size } < max_tolarated_size
+          cnt += 1
+        end
 
-      while File.exists?("#{tmp_file.path}.#{cnt}") do
-        actual_size = File.stat("#{tmp_file.path}.#{cnt}").size
-        puts "Actual size: #{actual_size} Max: #{max_tolarated_size} Configured: #{file_rotation_size} Ratio: #{(actual_size.to_f/file_rotation_size.to_f)}  "
-        insist { actual_size } < max_tolarated_size
-        cnt += 1
-      end
-      # events = tmp_file.map {|line| LogStash::Event.new(LogStash::Json.load(line))}
-      # sorted = events.sort_by {|e| e.get('sequence')}
-      # sorted.each do |event|
-        # insist {event.get("message")} == "hello world"
-        # insist {event.get("sequence")} == line_num
-        # line_num += 1
-      # end
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
 
-      # insist {line_num} == event_count
-    end # agent
+    describe "no events are lost during file rotation" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 300000
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+        }
+      }
+      CONFIG
+
+      agent do
+        line_num = 0
+        max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
+        cnt = 0
+        line_num = 0
+
+        # Check that all events are logged
+        events = File.open("#{tmp_file.path}").map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+        sorted = events.sort_by {|e| e.get('sequence')}
+        sorted.each do |event|
+          line_num += 1
+        end
+        while File.exists?("#{tmp_file.path}.#{cnt}") do
+          events = File.open("#{tmp_file.path}.#{cnt}").map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+          sorted = events.sort_by {|e| e.get('sequence')}
+          sorted.each do |event|
+            line_num += 1
+          end
+          cnt += 1
+        end
+
+        insist {line_num} == event_count
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
   end
 
   describe "#register" do
