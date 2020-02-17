@@ -77,11 +77,22 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # Size based file rotation
   #
   # Set the filesize in `bytes` after which the file is automatically rotated.
-  # The rotation automatically appends a number ending  .1, .2, .3 ... to the
+  # The rotation automatically appends a number ending  .0, .1, .2, .3 ... to the
   # file name.
   #
   # If set to `file_rotation_size => 0` no rotation will be performed
   config :file_rotation_size, :validate => :number, :default => 0
+
+  # Max number of rotations to keep
+  #
+  # Set the maximum number of rotation for each logfile to keep. The deletion
+  # of out-dated filers is performed after each rotation.
+  # Example: `"max_file_rotations" => 3 will allow up to `4` files
+  # `/path/to/logfile`, `/path/to/logfile.0`,`/path/to/logfile.1`,`/path/to/logfile.2`,
+  #
+  # If set to `max_file_rotations => 0` no cleanup will be performed
+  # If `file_rotation_size => 0` this setting will be ignored
+  config :max_file_rotations, :validate => :number, :default => 0
 
   default :codec, "json_lines"
 
@@ -94,7 +105,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @path = File.expand_path(path)
 
     validate_path
-    validate_file_rotation_size
+    validate_file_rotation_settings
 
     if path_with_field_ref?
       @file_root = extract_file_root
@@ -163,10 +174,14 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
   end
 
-  def validate_file_rotation_size
+  def validate_file_rotation_settings
     if (file_rotation_size < 0)
       @logger.error("File: The file_rotation_size must not be a negative number", :file_rotation_size => @file_rotation_size)
       raise LogStash::ConfigurationError.new("The file_rotation_size must not be a negative number.")
+    end
+    if (max_file_rotations < 0)
+      @logger.error("File: The max_file_rotations must not be a negative number", :max_file_rotations => @max_file_rotations)
+      raise LogStash::ConfigurationError.new("Setting  max_file_rotations must not be a negative number.")
     end
   end
 
@@ -202,37 +217,46 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     file_output_path
   end
 
-  def rotate_log_file(file_output_path)
-    if (file_rotation_size > 0)
-      @io_mutex.synchronize do
-        # Check current size
-        if (File.exist?(file_output_path) && File.stat(file_output_path).size > file_rotation_size)
-          puts "Start file rotation..."
-          cnt = 0
-          while File.exist?("#{file_output_path}.#{cnt}")
-            cnt += 1
-          end
+  def cleanup_rotated_files(file_output_path)
+    return unless max_file_rotations > 0
 
-          # Flush file
-          if (@files.include?(file_output_path))
-            puts "Flush file: #{file_output_path}..."
-            @files[file_output_path].flush
-            @files[file_output_path].close
-            @files.delete(file_output_path)
-          end
-          puts "Having: #{cnt} rotations"
-          until cnt == 0
-            puts "Move file: #{file_output_path}.#{cnt - 1} => #{file_output_path}.#{cnt}"
-            File.rename("#{file_output_path}.#{cnt - 1}", "#{file_output_path}.#{cnt}")
-            cnt -= 1
-          end
-          if (File.exist?("#{file_output_path}"))
-            puts "Final file: #{file_output_path} =>  #{file_output_path}.0"
-            File.rename("#{file_output_path}", "#{file_output_path}.0")
-          end
-          puts "Finished rotation."
-        end
+    if File.exist?("#{file_output_path}.#{max_file_rotations}")
+      File.unlink("#{file_output_path}.#{max_file_rotations}")
+      @logger.info("Deleted rotated file: #{file_output_path}.#{max_file_rotations}")
+    end
+  end
+
+  def rotate_log_file(file_output_path)
+    return unless file_rotation_size > 0
+    @io_mutex.synchronize do
+      # Check current size
+      return unless (File.exist?(file_output_path) && File.stat(file_output_path).size > file_rotation_size)
+
+      cnt = 0
+      while File.exist?("#{file_output_path}.#{cnt}")
+        cnt += 1
       end
+
+      # Flush file
+      if (@files.include?(file_output_path))
+        @logger.debug("Flush and close file: #{file_output_path}")
+        @files[file_output_path].flush
+        @files[file_output_path].close
+        @files.delete(file_output_path)
+      end
+
+      until cnt == 0
+        @logger.debug("Move file: #{file_output_path}.#{cnt - 1} => #{file_output_path}.#{cnt}")
+        File.rename("#{file_output_path}.#{cnt - 1}", "#{file_output_path}.#{cnt}")
+        cnt -= 1
+      end
+      if (File.exist?("#{file_output_path}"))
+        @logger.debug("Move file: #{file_output_path} =>  #{file_output_path}.0")
+        File.rename("#{file_output_path}", "#{file_output_path}.0")
+      end
+
+      cleanup_rotated_files(file_output_path)
+      @logger.info("Finished file rotation")
     end
   end
 
