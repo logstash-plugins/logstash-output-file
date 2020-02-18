@@ -282,8 +282,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       @files.each do |path, fd|
         @logger.debug("Flushing file", :path => path, :fd => fd)
         fd.flush
-        fd.close
-        @files.delete(path)
       end
     end
   rescue => e
