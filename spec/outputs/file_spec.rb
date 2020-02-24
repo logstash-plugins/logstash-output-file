@@ -11,6 +11,7 @@ require "tempfile"
 require "uri"
 require "fileutils"
 require "flores/random"
+require "insist"
 
 describe LogStash::Outputs::File do
   describe "ship lots of events to a file" do

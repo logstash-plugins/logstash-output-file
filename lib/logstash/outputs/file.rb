@@ -80,6 +80,12 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # The rotation automatically appends a number ending  .0, .1, .2, .3 ... to the
   # file name.
   #
+  # The current rotation number is evaluated dyamically by scanning the directory,
+  # use either `max_file_rotation` or a date based file name pattern to avoid
+  # performance issues due to large amount of files to be moved.
+  # Files ending with .0.gz .1.gz ... will be deteced automatially to intigrate with
+  # log compression performed by other tools
+  #
   # If set to `file_rotation_size => 0` no rotation will be performed
   config :file_rotation_size, :validate => :number, :default => 0
 
@@ -220,9 +226,14 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def cleanup_rotated_files(file_output_path)
     return unless max_file_rotations > 0
 
-    if File.exist?("#{file_output_path}.#{max_file_rotations}")
-      File.unlink("#{file_output_path}.#{max_file_rotations}")
-      @logger.info("Deleted rotated file: #{file_output_path}.#{max_file_rotations}")
+    fileName ="#{file_output_path}.#{max_file_rotations}"
+    if File.exist?(fileName)
+      File.unlink(fileName)
+      @logger.info("Deleted rotated file: #{fileName}")
+    elsif
+      File.exist?("#{fileName}.gz")
+      File.unlink("#{fileName}.gz")
+      @logger.info("Deleted rotated file: #{fileName}.gz")
     end
   end
 
@@ -233,7 +244,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       return unless (File.exist?(file_output_path) && File.stat(file_output_path).size > file_rotation_size)
 
       cnt = 0
-      while File.exist?("#{file_output_path}.#{cnt}")
+      while File.exist?("#{file_output_path}.#{cnt}") or File.exist?("#{file_output_path}.#{cnt}.gz")
         cnt += 1
       end
 
@@ -246,8 +257,13 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       end
 
       until cnt == 0
-        @logger.debug("Move file: #{file_output_path}.#{cnt - 1} => #{file_output_path}.#{cnt}")
-        File.rename("#{file_output_path}.#{cnt - 1}", "#{file_output_path}.#{cnt}")
+        if File.exist?("#{file_output_path}.#{cnt - 1}")
+          @logger.debug("Move file: #{file_output_path}.#{cnt - 1} => #{file_output_path}.#{cnt}")
+          File.rename("#{file_output_path}.#{cnt - 1}", "#{file_output_path}.#{cnt}")
+        elsif File.exist?("#{file_output_path}.#{cnt - 1}.gz")
+          @logger.debug("Move file: #{file_output_path}.#{cnt - 1}.gz => #{file_output_path}.#{cnt}.gz")
+          File.rename("#{file_output_path}.#{cnt - 1}.gz", "#{file_output_path}.#{cnt}.gz")
+        end
         cnt -= 1
       end
       if (File.exist?("#{file_output_path}"))
