@@ -73,6 +73,11 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # If `overwrite`, the file will be truncated before writing and only the most
   # recent event will appear in the file.
   config :write_behavior, :validate => [ "overwrite", "append" ], :default => "append"
+  
+  # How often should the stale files cleanup cycle run (in seconds). 
+  # The stale files cleanup cycle closes inactive files (i.e files not written to since the last cycle).
+  config :stale_cleanup_interval, :validate => :number, :default => 10
+
 
   default :codec, "json_lines"
 
@@ -99,7 +104,6 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
 
     @last_stale_cleanup_cycle = Time.now
-    @stale_cleanup_interval = 10
   end
 
   def multi_receive_encoded(events_and_encoded)
