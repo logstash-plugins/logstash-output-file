@@ -211,8 +211,121 @@ describe LogStash::Outputs::File do
         end
       end # agent
     end
-  end
 
+    describe "handles `keep_file_extension` correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}.log"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}.log") } == true
+        insist { File.exists?("#{tmp_file.path}.0.log") } == true
+        insist { File.exists?("#{tmp_file.path}.1.log") } == true
+        insist { File.exists?("#{tmp_file.path}.2.log") } == false
+        insist { File.exists?("#{tmp_file.path}.3.log") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `keep_file_extension` without extension correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}") } == true
+        insist { File.exists?("#{tmp_file.path}.0") } == true
+        insist { File.exists?("#{tmp_file.path}.1") } == true
+        insist { File.exists?("#{tmp_file.path}.2") } == false
+        insist { File.exists?("#{tmp_file.path}.3") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `keep_file_extension` with `.` in filename correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}.afterdot.log"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}.afterdot.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.0.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.1.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.2.log") } == false
+        insist { File.exists?("#{tmp_file.path}.afterdot.3.log") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+  end
   describe "#register" do
     let(:path) { '/%{name}' }
     let(:output) { LogStash::Outputs::File.new({ "path" => path }) }

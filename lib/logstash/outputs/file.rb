@@ -92,13 +92,21 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   # Max number of rotations to keep
   #
   # Set the maximum number of rotation for each logfile to keep. The deletion
-  # of out-dated filers is performed after each rotation.
-  # Example: `"max_file_rotations" => 3 will allow up to `4` files
+  # of out-dated files is performed after each rotation.
+  # Example: `"max_file_rotations" => 3` will allow up to `4` files
   # `/path/to/logfile`, `/path/to/logfile.0`,`/path/to/logfile.1`,`/path/to/logfile.2`,
   #
   # If set to `max_file_rotations => 0` no cleanup will be performed
   # If `file_rotation_size => 0` this setting will be ignored
   config :max_file_rotations, :validate => :number, :default => 0
+
+  # Keep file extension with log rotation
+  #
+  # Set whether the file extension, segment of the filename after the last `.`, should
+  # be preserved when rotating logfiles
+  # Example: `"keep_file_extension" => true` will preserve the extension
+  # `/path/to/logfile.log`, `/path/to/logfile.0.log`,`/path/to/logfile.1.log`,`/path/to/logfile.2.log ...`,
+  config :keep_file_extension, :validate => :boolean, :default => false
 
   default :codec, "json_lines"
 
@@ -226,7 +234,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   def cleanup_rotated_files(file_output_path)
     return unless max_file_rotations > 0
 
-    fileName ="#{file_output_path}.#{max_file_rotations}"
+    fileName = get_rotated_output_file_name(file_output_path, max_file_rotations, false)
     if File.exist?(fileName)
       File.unlink(fileName)
       @logger.info("Deleted rotated file: #{fileName}")
@@ -237,6 +245,22 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     end
   end
 
+  def get_rotated_output_file_name(filename, rotation, compressed)
+    newname = filename
+    if (keep_file_extension)
+      newname = "#{File.dirname(filename)}/#{File.basename(filename, ".*")}.#{rotation}#{File.extname(filename)}"
+    else
+      newname = "#{filename}.#{rotation}"
+    end
+    if compressed
+      newname = "#{newname}.gz"
+    else
+      newname = "#{newname}"
+    end
+    return newname
+  end
+
+
   def rotate_log_file(file_output_path)
     return unless file_rotation_size > 0
     @io_mutex.synchronize do
@@ -244,7 +268,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       return unless (File.exist?(file_output_path) && File.stat(file_output_path).size > file_rotation_size)
 
       cnt = 0
-      while File.exist?("#{file_output_path}.#{cnt}") or File.exist?("#{file_output_path}.#{cnt}.gz")
+      while File.exist?(get_rotated_output_file_name(file_output_path, cnt, false)) or File.exist?(get_rotated_output_file_name(file_output_path, cnt, true))
         cnt += 1
       end
 
@@ -257,18 +281,22 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       end
 
       until cnt == 0
-        if File.exist?("#{file_output_path}.#{cnt - 1}")
-          @logger.debug("Move file: #{file_output_path}.#{cnt - 1} => #{file_output_path}.#{cnt}")
-          File.rename("#{file_output_path}.#{cnt - 1}", "#{file_output_path}.#{cnt}")
-        elsif File.exist?("#{file_output_path}.#{cnt - 1}.gz")
-          @logger.debug("Move file: #{file_output_path}.#{cnt - 1}.gz => #{file_output_path}.#{cnt}.gz")
-          File.rename("#{file_output_path}.#{cnt - 1}.gz", "#{file_output_path}.#{cnt}.gz")
+        if File.exist?(get_rotated_output_file_name(file_output_path, cnt - 1, false))
+          @logger.debug("Move file: #{get_rotated_output_file_name(file_output_path, cnt - 1, false)} => #{get_rotated_output_file_name(file_output_path, cnt , false)}")
+          File.rename(
+            get_rotated_output_file_name(file_output_path, cnt - 1, false),
+            get_rotated_output_file_name(file_output_path, cnt, false))
+        elsif File.exist?(get_rotated_output_file_name(file_output_path, cnt - 1, true))
+          @logger.debug("Move file: #{get_rotated_output_file_name(file_output_path, cnt - 1, true)} => #{get_rotated_output_file_name(file_output_path, cnt, true)}")
+          File.rename(
+            get_rotated_output_file_name(file_output_path, cnt - 1, true),
+            get_rotated_output_file_name(file_output_path, cnt, true))
         end
         cnt -= 1
       end
-      if (File.exist?("#{file_output_path}"))
-        @logger.debug("Move file: #{file_output_path} =>  #{file_output_path}.0")
-        File.rename("#{file_output_path}", "#{file_output_path}.0")
+      if (File.exist?(file_output_path))
+        @logger.debug("Move file: #{file_output_path} => #{get_rotated_output_file_name(file_output_path, 0, false)}")
+        File.rename(file_output_path, get_rotated_output_file_name(file_output_path, 0, false))
       end
 
       cleanup_rotated_files(file_output_path)
