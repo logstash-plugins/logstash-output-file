@@ -125,11 +125,35 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
           # append to the file
           chunks.each {|chunk| fd.write(chunk) }
         end
-        fd.flush unless @flusher && @flusher.alive?
+        on_flush(fd, path) unless @flusher && @flusher.alive?
       end
 
       close_stale_files
     end
+  end
+
+  def on_flush(fd, path)
+    fd.flush
+    if fd.is_temp
+      copy_to_gzip(fd, path)
+    end
+  end
+
+  def copy_to_gzip(fd, path)
+    zipfd = get_file(path)
+    zipfd = Zlib::GzipWriter.new(zipfd)
+    fd.seek(0, IO::SEEK_SET)
+    data = fd.read
+    fd.truncate(0)
+    fd.seek(0, IO::SEEK_SET)
+    if @write_behavior == "overwrite"
+      zipfd.to_io.truncate(0)
+      zipfd.to_io.seek(0, IO::SEEK_SET)
+    end
+    zipfd.write(data)
+    zipfd.flush
+    zipfd.to_io.flush
+    zipfd.close
   end
 
   def close
@@ -139,8 +163,15 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
       @files.each do |path, fd|
         begin
+          if fd.is_temp
+             copy_to_gzip(fd, path)
+          end
           fd.close
-          @logger.debug("Closed file #{path}", :fd => fd)
+          if fd.is_temp && File.exist?(fd.path)
+             File.delete(fd.path)
+             @logger.debug("Deleted temp file ", :path => fd.path)
+          end
+          @logger.debug("Closed file #{fd}", :fd => fd)
         rescue Exception => e
           @logger.error("Exception while flushing and closing files.", :exception => e)
         end
@@ -206,6 +237,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       @files.each do |path, fd|
         @logger.debug("Flushing file", :path => path, :fd => fd)
         fd.flush
+        if fd.is_temp
+          copy_to_gzip(fd, path)
+        end
       end
     end
   rescue => e
@@ -224,6 +258,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     inactive_files.each do |path, fd|
       @logger.info("Closing file %s" % path)
       fd.close
+      if fd.is_temp && File.exist?(fd.path)
+        File.delete(fd.path)
+      end
       @files.delete(path)
     end
     # mark all files as inactive, a call to write will mark them as active again
@@ -240,6 +277,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
   end
 
   def open(path)
+    originalPath = path
     if !deleted?(path) && cached?(path)
       return @files[path]
     end
@@ -253,8 +291,27 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
       end
     end
 
-    @logger.info("Opening file", :path => path)
+    #Fix for broken gzip issue.
+    if gzip
+      tmpfile = java.io.File.createTempFile("outfile-", "-temp");
+      path = tmpfile.path
+      #create file at original path also, so that temp file is not created again
+      make_dir(originalPath)
+      gzFile = get_file(originalPath)
+      #if gzFile is fifo type, file writer object is returned that needs to closed.
+      if gzFile.class == Java::JavaIo::FileWriter
+        gzFile.close
+      end
+    end
 
+    @logger.info("Opening file", :path => path)
+    make_dir(path)
+    fd = get_file(path)
+    @files[originalPath] = IOWriter.new(fd, gzip)
+    return @files[originalPath]
+  end
+
+  def make_dir(path)
     dir = File.dirname(path)
     if !Dir.exist?(dir)
       @logger.info("Creating directory", :directory => dir)
@@ -264,7 +321,9 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         FileUtils.mkdir_p(dir)
       end
     end
+  end
 
+  def get_file(path)
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
     if stat && stat.ftype == "fifo"
@@ -276,10 +335,7 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
         fd = File.new(path, "a+")
       end
     end
-    if gzip
-      fd = Zlib::GzipWriter.new(fd)
-    end
-    @files[path] = IOWriter.new(fd)
+    return fd
   end
 
   ##
@@ -360,8 +416,9 @@ end
 class IOWriter
   attr_accessor :active
 
-  def initialize(io)
+  def initialize(io, is_temp)
     @io = io
+    @is_temp = is_temp
   end
 
   def write(*args)
@@ -374,6 +431,10 @@ class IOWriter
     if @io.class == Zlib::GzipWriter
       @io.to_io.flush
     end
+  end
+
+  def is_temp
+    return @is_temp
   end
 
   def method_missing(method_name, *args, &block)
