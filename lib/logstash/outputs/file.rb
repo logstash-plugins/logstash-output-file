@@ -256,14 +256,21 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
     @logger.info("Opening file", :path => path)
 
     dir = File.dirname(path)
-    if !Dir.exist?(dir)
-      @logger.info("Creating directory", :directory => dir)
-      if @dir_mode != -1
-        FileUtils.mkdir_p(dir, :mode => @dir_mode)
-      else
-        FileUtils.mkdir_p(dir)
+    directories = dir.split(File::SEPARATOR)
+    dynamic_path = File::SEPARATOR
+
+    # build path one directory at a time
+    directories.each { |d|
+      dynamic_path = dynamic_path + File::SEPARATOR + d
+      if !Dir.exist?(dynamic_path) && !File.symlink?(dynamic_path)
+        @logger.info("Creating directory", :directory => dynamic_path)
+        if @dir_mode != -1
+          FileUtils.mkdir(dynamic_path, :mode => @dir_mode)
+        else
+          FileUtils.mkdir(dynamic_path)
+        end
       end
-    end
+    }
 
     # work around a bug opening fifos (bug JRUBY-6280)
     stat = File.stat(path) rescue nil
