@@ -246,8 +246,8 @@ class LogStash::Outputs::File < LogStash::Outputs::Base
 
     if deleted?(path)
       if @create_if_deleted
-        @logger.debug("Required path was deleted, creating the file again", :path => path)
-        @files.delete(path)
+        @logger.debug("Required path was deleted, creating the file again, and releasing old handle", :path => path)
+        @files.delete(path).close if cached?(path)
       else
         return @files[path] if cached?(path)
       end
