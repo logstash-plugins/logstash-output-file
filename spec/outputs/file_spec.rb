@@ -12,6 +12,10 @@ require "uri"
 require "fileutils"
 require "flores/random"
 
+def get_sequence_number(event)
+  event.get('sequence') || event.get('event')['sequence']
+end
+
 describe LogStash::Outputs::File do
   describe "ship lots of events to a file" do
     tmp_file = Tempfile.new('logstash-spec-output-file')
@@ -37,10 +41,10 @@ describe LogStash::Outputs::File do
 
       # Now check all events for order and correctness.
       events = tmp_file.map {|line| LogStash::Event.new(LogStash::Json.load(line))}
-      sorted = events.sort_by {|e| e.get('sequence')}
+      sorted = events.sort_by {|e| get_sequence_number(e)}
       sorted.each do |event|
         insist {event.get("message")} == "hello world"
-        insist {event.get("sequence")} == line_num
+        insist {get_sequence_number(event)} == line_num
         line_num += 1
       end
 
@@ -72,10 +76,10 @@ describe LogStash::Outputs::File do
         line_num = 0
         # Now check all events for order and correctness.
         events = Zlib::GzipReader.open(tmp_file.path).map {|line| LogStash::Event.new(LogStash::Json.load(line)) }
-        sorted = events.sort_by {|e| e.get("sequence")}
+        sorted = events.sort_by {|e| get_sequence_number(e)}
         sorted.each do |event|
           insist {event.get("message")} == "hello world"
-          insist {event.get("sequence")} == line_num
+          insist {get_sequence_number(event)} == line_num
           line_num += 1
         end
         insist {line_num} == event_count
