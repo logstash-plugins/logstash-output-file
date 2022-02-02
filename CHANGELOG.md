@@ -1,3 +1,7 @@
+## unreleased
+  - Fixed unit tests to account for ECS by default [#94](https://github.com/logstash-plugins/logstash-output-file/pull/94)
+  - Fixed .ci integration [#94](https://github.com/logstash-plugins/logstash-output-file/pull/94)
+  
 ## 4.3.0
   - Made `stale_cleanup_interval` configurable [#84](https://github.com/logstash-plugins/logstash-output-file/pull/84)
   - CI: upgrade testing [#83](https://github.com/logstash-plugins/logstash-output-file/pull/83)
