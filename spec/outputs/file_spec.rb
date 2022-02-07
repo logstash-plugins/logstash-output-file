@@ -87,6 +87,249 @@ describe LogStash::Outputs::File do
     end
   end
 
+  describe "Size based file rotation" do
+    describe "create files of configured maximum size (5% tolerance)" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 300000
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+        }
+      }
+      CONFIG
+
+      agent do
+        line_num = 0
+        # Check that files are within 5% size tolerance
+        max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
+        cnt = 0
+
+        # puts "Check: #{File.stat("#{tmp_file.path}").size} < #{max_tolarated_size}"
+        insist { File.stat("#{tmp_file.path}").size } < max_tolarated_size
+
+        while File.exists?("#{tmp_file.path}.#{cnt}") do
+          actual_size = File.stat("#{tmp_file.path}.#{cnt}").size
+          # puts "Actual size: #{actual_size} Max: #{max_tolarated_size} Configured: #{file_rotation_size} ratio: #{((((actual_size.to_f/file_rotation_size.to_f))*100)-100).round(3)}%"
+          insist { actual_size } < max_tolarated_size
+          cnt += 1
+        end
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "no events are lost during file rotation" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 300000
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+        }
+      }
+      CONFIG
+
+      agent do
+        line_num = 0
+        max_tolarated_size = (file_rotation_size + (file_rotation_size * 0.05))
+        cnt = 0
+        line_num = 0
+
+        # Check that all events are logged
+        events = File.open("#{tmp_file.path}").map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+        sorted = events.sort_by {|e| e.get('sequence')}
+        sorted.each do |event|
+          line_num += 1
+        end
+        while File.exists?("#{tmp_file.path}.#{cnt}") do
+          events = File.open("#{tmp_file.path}.#{cnt}").map {|line| LogStash::Event.new(LogStash::Json.load(line))}
+          sorted = events.sort_by {|e| e.get('sequence')}
+          sorted.each do |event|
+            line_num += 1
+          end
+          cnt += 1
+        end
+
+        insist {line_num} == event_count
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `max_file_rotations` correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      file_rotation_size = 1024*1024
+      max_file_rotations = 2
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+        }
+      }
+      CONFIG
+
+      agent do
+        insist { File.exists?("#{tmp_file.path}") } == true
+        insist { File.exists?("#{tmp_file.path}.0") } == true
+        insist { File.exists?("#{tmp_file.path}.1") } == true
+        insist { File.exists?("#{tmp_file.path}.2") } == false
+        insist { File.exists?("#{tmp_file.path}.3") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `keep_file_extension` correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}.log"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}.log") } == true
+        insist { File.exists?("#{tmp_file.path}.0.log") } == true
+        insist { File.exists?("#{tmp_file.path}.1.log") } == true
+        insist { File.exists?("#{tmp_file.path}.2.log") } == false
+        insist { File.exists?("#{tmp_file.path}.3.log") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `keep_file_extension` without extension correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}") } == true
+        insist { File.exists?("#{tmp_file.path}.0") } == true
+        insist { File.exists?("#{tmp_file.path}.1") } == true
+        insist { File.exists?("#{tmp_file.path}.2") } == false
+        insist { File.exists?("#{tmp_file.path}.3") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+
+    describe "handles `keep_file_extension` with `.` in filename correctly" do
+      tmp_file = Tempfile.new('logstash-spec-output-file')
+      event_count = 50000
+      max_file_rotations = 2
+      file_rotation_size = 1024*1024
+
+      config <<-CONFIG
+      input {
+        generator {
+          message => "hello world"
+          count => #{event_count}
+          type => "generator"
+        }
+      }
+      output {
+        file {
+          path => "#{tmp_file.path}.afterdot.log"
+          file_rotation_size => #{file_rotation_size}
+          max_file_rotations => #{max_file_rotations}
+          keep_file_extension => true
+        }
+      }
+      CONFIG
+
+      agent do
+        puts "#{tmp_file.path}.log"
+        insist { File.exists?("#{tmp_file.path}.afterdot.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.0.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.1.log") } == true
+        insist { File.exists?("#{tmp_file.path}.afterdot.2.log") } == false
+        insist { File.exists?("#{tmp_file.path}.afterdot.3.log") } == false
+
+        Dir.glob("#{tmp_file.path}.*").each do |file|
+          File.delete(file)
+        end
+      end # agent
+    end
+  end
   describe "#register" do
     let(:path) { '/%{name}' }
     let(:output) { LogStash::Outputs::File.new({ "path" => path }) }
@@ -114,14 +357,23 @@ describe LogStash::Outputs::File do
       output = LogStash::Outputs::File.new({ "path" => path })
       expect { output.register }.not_to raise_error
     end
+
+    it 'does not allow negative "file_rotation_size"' do
+      output = LogStash::Outputs::File.new({ "path" => '/tmp/%{name}', "file_rotation_size" => -1 })
+      expect { output.register }.to raise_error(LogStash::ConfigurationError)
+    end
+
+    it 'does not allow negative "max_file_rotations"' do
+      output = LogStash::Outputs::File.new({ "path" => '/tmp/%{name}', "max_file_rotations" => -1 })
+      expect { output.register }.to raise_error(LogStash::ConfigurationError)
+    end
   end
 
   describe "receiving events" do
-
     context "when write_behavior => 'overwrite'" do
       let(:tmp) { Stud::Temporary.pathname }
       let(:config) {
-        { 
+        {
           "write_behavior" => "overwrite",
           "path" => tmp,
           "codec" => LogStash::Codecs::JSONLines.new,
@@ -131,7 +383,7 @@ describe LogStash::Outputs::File do
       let(:output) { LogStash::Outputs::File.new(config) }
 
       let(:count) { Flores::Random.integer(1..10) }
-      let(:events) do 
+      let(:events) do
         Flores::Random.iterations(1..10).collect do |i|
           LogStash::Event.new("value" => i)
         end
@@ -183,7 +435,7 @@ describe LogStash::Outputs::File do
           event = LogStash::Event.new("event_id" => i+10)
           output.multi_receive([event])
         end
-        
+
         expect(FileTest.size(temp_file.path)).to be > 0
       end
 
