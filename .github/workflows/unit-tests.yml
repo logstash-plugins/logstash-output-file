@@ -29,6 +29,7 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
     with:
+      elastic-stack-versions: '["8.current","9.previous","9.current","main"]'
       timeout-minutes: 60
 
   scheduled:
@@ -40,5 +41,6 @@ jobs:
     uses: logstash-plugins/.ci/.github/workflows/unit-tests.yml@1.x
     secrets: inherit
     with:
+      elastic-stack-versions: '["8.current","9.previous","9.current","main"]'
       ref: ${{ matrix.branch }}
       timeout-minutes: 60
